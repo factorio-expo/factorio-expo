@@ -228,7 +228,7 @@ services:
   # bind source as root; harmless on Docker Desktop.
   expo-storage-init:
     logging: *logging
-    image: debian:trixie-20261020-slim
+    image: debian:trixie-20261104-slim
     container_name: factorio-expo-storage-init
     command: ["sh", "-c", "mkdir -p /storage /ledger && chown 65532:65532 /storage /ledger && chmod 0755 /storage && chmod 0750 /ledger"]
     volumes:
@@ -424,7 +424,7 @@ services:
   docker-socket-proxy:
     logging: *logging
     profiles: ["admin"]
-    image: tecnativa/docker-socket-proxy:v0.5.0
+    image: tecnativa/docker-socket-proxy:3.4
     container_name: factorio-expo-docker-socket-proxy
     restart: unless-stopped
     environment:
@@ -442,7 +442,7 @@ services:
   dozzle:
     logging: *logging
     profiles: ["admin"]
-    image: amir20/dozzle:v11.4.0
+    image: amir20/dozzle:v11.4.3
     container_name: factorio-expo-dozzle
     restart: unless-stopped
     environment:
