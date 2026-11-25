@@ -1,0 +1,25 @@
+---
+// Marks a page's entry for the bug button (ProblemReport.astro): its ids and
+// what staff need to find the problem (revision, game version, the leaf's
+// preview and analysis states). Read when the dialog opens; shown to the
+// reporter before sending.
+import type { PageProblemContext } from "@lib/problem-report";
+
+interface Props {
+	entryId: string;
+	blueprintId?: string | undefined;
+	context: Record<string, string | number | undefined>;
+}
+const { entryId, blueprintId, context } = Astro.props;
+const marker: PageProblemContext = {
+	entry_id: entryId,
+	blueprint_id: blueprintId,
+	context: Object.fromEntries(
+		Object.entries(context)
+			.filter(([, value]) => value !== undefined && value !== "")
+			.map(([key, value]) => [key, String(value)]),
+	),
+};
+---
+
+<div hidden data-problem-context={JSON.stringify(marker)}></div>

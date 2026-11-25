@@ -1,0 +1,55 @@
+{
+	"iconTypes": [
+		"item",
+		"entity",
+		"recipe",
+		"fluid",
+		"virtual-signal",
+		"planet",
+		"space-location",
+		"quality",
+		"tile",
+		"technology",
+		"achievement",
+		"item-group"
+	],
+	"qualities": ["normal", "uncommon", "rare", "epic", "legendary"],
+	"parse": [
+		{ "token": "[item=iron-plate]", "want": { "type": "item", "name": "iron-plate", "quality": "normal" } },
+		{ "token": "[item=iron-plate,quality=rare]", "want": { "type": "item", "name": "iron-plate", "quality": "rare" } },
+		{ "token": "[item=iron-plate,quality=normal]", "want": { "type": "item", "name": "iron-plate", "quality": "normal" } },
+		{ "token": "[fluid=water,quality=rare]", "want": { "type": "fluid", "name": "water", "quality": "normal" } },
+		{ "token": "[virtual-signal=signal_A]", "want": { "type": "virtual-signal", "name": "signal_A", "quality": "normal" } },
+		{ "token": "[color=red]", "want": null },
+		{ "token": "[font=default-bold]", "want": null },
+		{ "token": "[item=]", "want": null },
+		{ "token": "item=iron-plate", "want": null },
+		{ "token": "[item=a b]", "want": null },
+		{ "token": "[item=iron-plate,quality=]", "want": null }
+	],
+	"format": [
+		{ "token": { "type": "item", "name": "iron-plate", "quality": "normal" }, "keepNormal": false, "want": "[item=iron-plate]" },
+		{ "token": { "type": "item", "name": "iron-plate", "quality": "" }, "keepNormal": false, "want": "[item=iron-plate]" },
+		{ "token": { "type": "item", "name": "iron-plate", "quality": "rare" }, "keepNormal": false, "want": "[item=iron-plate,quality=rare]" },
+		{ "token": { "type": "item", "name": "iron-plate", "quality": "normal" }, "keepNormal": true, "want": "[item=iron-plate,quality=normal]" },
+		{ "token": { "type": "item", "name": "iron-plate", "quality": "" }, "keepNormal": true, "want": "[item=iron-plate]" },
+		{ "token": { "type": "fluid", "name": "water", "quality": "rare" }, "keepNormal": false, "want": "[fluid=water]" },
+		{ "token": { "type": "fluid", "name": "water", "quality": "normal" }, "keepNormal": true, "want": "[fluid=water]" }
+	],
+	"scan": [
+		{ "text": "", "want": [] },
+		{ "text": "no icons [here", "want": [] },
+		{
+			"text": "[item=a]x[fluid=water,quality=epic] [color=red]y[/color]",
+			"want": [
+				{ "raw": "[item=a]", "type": "item", "name": "a", "quality": "normal" },
+				{ "raw": "[fluid=water,quality=epic]", "type": "fluid", "name": "water", "quality": "normal" }
+			]
+		}
+	],
+	"strip": [
+		{ "text": "[item=a]Gleba [item=b,quality=rare]science", "want": "Gleba science" },
+		{ "text": "keep [color=red] this", "want": "keep [color=red] this" },
+		{ "text": "plain", "want": "plain" }
+	]
+}

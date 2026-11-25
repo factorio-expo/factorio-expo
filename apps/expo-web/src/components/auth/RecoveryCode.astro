@@ -1,0 +1,101 @@
+---
+// The recovery code of a new account or of a recovery, shown once. It comes
+// from this tab's sessionStorage (lib/recovery-code.ts: the API hands it out in
+// one response and keeps only a hash), so recovery-code.ts fills the page in
+// and "Continue" forgets it. Without one waiting the page says so.
+import Copy from "@lucide/astro/icons/copy";
+import Download from "@lucide/astro/icons/download";
+---
+
+<section data-recovery aria-live="polite">
+	<p data-recovery-loading aria-busy="true">
+		Loading your recovery code...
+	</p>
+
+	<div data-recovery-shown hidden>
+		<p data-recovery-intro></p>
+		<p>
+			Your account has no password or email, so this code is the only way back in if you lose
+			your login: a social account you can no longer use, or a lost device with your passkey.
+			We keep only a fingerprint of it and cannot show it again.
+		</p>
+		<p class="code-box">
+			<small>
+				Recovery code for <strong data-recovery-username></strong>
+			</small>
+			<code data-recovery-code translate="no"></code>
+		</p>
+		<div class="actions">
+			<button type="button" class="secondary with-icon" data-recovery-copy>
+				<Copy aria-hidden="true" />
+				Copy
+			</button>
+			<button type="button" class="secondary with-icon" data-recovery-download>
+				<Download aria-hidden="true" />
+				Download
+			</button>
+		</div>
+		<p data-recovery-status role="status" aria-live="polite"></p>
+		<p>
+			<small>
+				Treat it like a password: with your username, it signs in as you. It works once, and
+				using it gives you a new one. Saving it is up to you; you can skip it and still use
+				the site.
+			</small>
+		</p>
+		<button type="button" data-recovery-continue>
+			Continue
+		</button>
+	</div>
+
+	<p data-recovery-missing hidden>
+		There is no recovery code waiting here. <a href="/">Go to the home page</a>.
+	</p>
+</section>
+
+<script>
+	import "./recovery-code.ts";
+</script>
+
+<style>
+	section {
+		max-width: 34rem;
+	}
+	.code-box {
+		display: grid;
+		gap: 0.25rem;
+		padding: 1rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-card-background-color);
+	}
+	[data-recovery-code] {
+		font-size: 1.25rem;
+		letter-spacing: 0.05em;
+		word-break: break-all;
+		user-select: all;
+		background: none;
+		padding: 0;
+	}
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
+	}
+	.with-icon {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0;
+
+		:global(svg) {
+			width: 1.1rem;
+			height: 1.1rem;
+			flex: none;
+		}
+	}
+	[data-recovery-status]:empty {
+		margin: 0;
+	}
+</style>

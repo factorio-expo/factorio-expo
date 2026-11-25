@@ -1,0 +1,133 @@
+---
+// Publishing an entry to an account, on its entry page. Two kinds of entry
+// can be published: a quick preview (when it expires, whether it failed; the
+// form is enabled once the preview and analysis are both ready) and an
+// anonymous entry (claimed as it is, shown only to holders of its edit link).
+// The form is for signed-in creators, collapsed until they open it; a
+// signed-out creator gets a sign-in link back to this page. Behaviour in
+// publish-panel.ts.
+import Collapsible from "@components/common/Collapsible.astro";
+import EntryDetailsFields from "@components/entry-details/EntryDetailsFields.astro";
+import PausedNotice from "@components/common/PausedNotice.astro";
+import type { Entry, LeafDetail, TagGroup } from "@lib/api";
+import { loginPath } from "@lib/safe-next";
+import { UPLOADS_PAUSED } from "@lib/site-pause";
+import { getSiteStatus } from "@lib/site-status";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+
+interface Props {
+	entry: Entry;
+	leaf: LeafDetail | null;
+	/** The viewer created it: owner, or holder of its edit token. */
+	canEdit: boolean;
+	signedIn: boolean;
+	tagGroups: TagGroup[];
+	/** Comments publishing as unlisted or private would delete. */
+	commentCount?: number;
+}
+
+const { entry, leaf, canEdit, signedIn, tagGroups, commentCount = 0 } = Astro.props;
+const preview = entry.quick_preview === true;
+// A quick preview always expires; its countdown is in this panel.
+const expiresAt = preview ? entry.expires_at : undefined;
+const ready =
+	!preview || (leaf?.preview_status === "ready" && leaf.production.availability === "ready");
+const canPublish = canEdit && signedIn;
+// Publishing is an upload: the all-uploads switch pauses it.
+const publishPaused = !(await getSiteStatus()).uploads;
+// Ownerless: the edit link is what grants editing now, and publishing ends it.
+const anonymous = !entry.owner_user_id;
+const outcome = anonymous
+	? "Once published, it is yours alone: only your account can edit or delete it, and the edit link stops working for good."
+	: "Once published, it is a lasting entry in your account.";
+---
+
+<section
+	class="publish-panel"
+	aria-label={preview ? "Quick preview" : "Anonymous entry"}
+	data-publish-panel
+	data-quick-preview={preview ? "" : undefined}
+	data-entry-id={entry.id}
+	data-expires-at={expiresAt}
+	data-ready={ready ? "" : undefined}
+>
+	{preview ? (
+		<p>
+			<strong>Quick preview.</strong> Unlisted; deleted
+			<time datetime={expiresAt} data-local="datetime" title={expiresAt}>
+				{expiresAt && isoDateTime(expiresAt)}
+			</time>
+			<span data-expiry-countdown></span> unless published.
+		</p>
+	) : (
+		<p>
+			<strong>Anonymous entry.</strong> Anyone with its edit link can edit or delete it.
+			Publish it to your account to own it; the edit link then stops working.
+		</p>
+	)}
+	<p class="failure" role="alert" data-preview-failure hidden></p>
+	{canPublish ? (
+		<Collapsible variant="card" open={false}>
+			<strong slot="title">Publish to my account</strong>
+			<form data-publish-form>
+				{publishPaused && <PausedNotice message={UPLOADS_PAUSED} />}
+				<p class="outcome">{outcome}</p>
+				<fieldset disabled={publishPaused} data-publish-fields>
+					<EntryDetailsFields
+						idPrefix="publish"
+						tagGroups={tagGroups}
+						title={entry.title}
+						description={entry.description}
+						tags={entry.tags}
+						visibility={entry.visibility}
+						expiry={{ keep: preview ? undefined : entry.expires_at }}
+						spoiler={entry.spoiler}
+						commentCount={commentCount}
+					/>
+					<button type="submit" disabled data-publish-button>
+						Publish
+					</button>
+				</fieldset>
+				<p data-publish-status role="status" aria-live="polite">
+					{ready
+						? ""
+						: "Publishing is available once the preview and analysis have finished."}
+				</p>
+			</form>
+		</Collapsible>
+	) : canEdit ? (
+		<p>
+			<a href={loginPath(Astro.url.pathname + Astro.url.search)}>Sign in to publish</a> it to
+			your account. {outcome}
+		</p>
+	) : (
+		<p>Only its creator can publish it.</p>
+	)}
+</section>
+
+<script>
+	import "./publish-panel.ts";
+</script>
+
+<style>
+	.publish-panel {
+		margin-bottom: 1.5rem;
+		padding: 1rem 1.25rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+	}
+	.publish-panel > p:last-child,
+	form > p:last-child {
+		margin-bottom: 0;
+	}
+	.outcome {
+		margin: 0.5rem 0 1rem;
+		color: var(--pico-muted-color);
+	}
+	.failure {
+		color: var(--pico-del-color);
+	}
+	button[type="submit"] {
+		width: auto;
+	}
+</style>

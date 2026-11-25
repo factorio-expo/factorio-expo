@@ -1,0 +1,38 @@
+---
+// Quick preview form: one exchange string, nothing else; behaviour in preview-form.ts.
+import HumanCheck from "@components/common/HumanCheck.astro";
+import PausedNotice from "@components/common/PausedNotice.astro";
+import TermsNote from "@components/common/TermsNote.astro";
+
+interface Props {
+	/** Why previewing is paused for this viewer (lib/site-pause.ts); the form is then disabled. */
+	paused?: string;
+}
+const { paused } = Astro.props;
+---
+
+<form data-preview-form>
+	{paused && <PausedNotice message={paused} />}
+	<fieldset disabled={Boolean(paused)} data-preview-fields>
+		<label for="preview-blueprint">Blueprint exchange string</label>
+		<textarea
+			class="mono"
+			id="preview-blueprint"
+			name="blueprint"
+			rows="8"
+			placeholder="Paste a blueprint exchange string, or drop a text file..."
+			required
+		></textarea>
+		<HumanCheck action="quick-preview" />
+		{/* Enabled by preview-form.ts: submitted without it, the form would GET the string into the URL. */}
+		<button type="submit" disabled>
+			Preview
+		</button>
+	</fieldset>
+	<TermsNote verb="previewing" />
+	<p data-preview-status role="status" aria-live="polite"></p>
+</form>
+
+<script>
+	import "./preview-form.ts";
+</script>

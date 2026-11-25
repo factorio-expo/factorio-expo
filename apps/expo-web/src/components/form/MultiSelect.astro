@@ -1,0 +1,489 @@
+---
+import MultiSelectOption from "./MultiSelectOption.astro";
+
+interface Option {
+	value: string;
+	label: string;
+	disabled?: boolean;
+	/** Options sharing a group must be adjacent; the list shows a heading per group. */
+	group?: string;
+	/** A game icon token shown in the option's chip (grouped lists). */
+	icon?: string;
+	/** A muted number after the label, e.g. how many results it would match. */
+	count?: number;
+}
+
+interface Props {
+	id: string;
+	name: string;
+	label: string;
+	options: Option[];
+	selected?: string[];
+	placeholder?: string;
+	/** Adds a text box that filters the options by label and group name. */
+	searchable?: boolean;
+	/**
+	 * One choice instead of several: radio buttons without a visible control, the
+	 * chosen option highlighted, closing on a choice. The options should include
+	 * the "any" one (value "") so a choice can be undone; options keep their order.
+	 */
+	single?: boolean;
+}
+
+const {
+	id,
+	name,
+	label,
+	options,
+	selected = [],
+	placeholder = `Select ${label.toLowerCase()}`,
+	searchable = false,
+	single = false,
+} = Astro.props;
+
+const selectedLabels = options
+	.filter((option) => selected.includes(option.value))
+	.map((option) => option.label);
+const initialValue = selectedLabels.length > 0 ? selectedLabels.join(", ") : placeholder;
+const grouped = options.some((option) => option.group);
+// Flat lists float the selected options to the top; grouped lists keep their order.
+const numbered = options.map((option, order) => Object.assign({}, option, { order }));
+const sortedOptions =
+	grouped || single
+		? numbered
+		: numbered.toSorted(
+				(a, b) => Number(selected.includes(b.value)) - Number(selected.includes(a.value)),
+			);
+const sections: { group?: string; options: typeof numbered }[] = [];
+for (const option of sortedOptions) {
+	const last = sections.at(-1);
+	if (last && last.group === option.group) last.options.push(option);
+	else sections.push({ group: option.group, options: [option] });
+}
+---
+
+<div class="multiselect">
+	<span class="field-label" id={`${id}-label`}>
+		{label}
+	</span>
+	<details class="dropdown" data-multiselect data-grouped={grouped} data-single={single}>
+		<summary aria-labelledby={`${id}-label ${id}-value`}>
+			<span class="selected-value" id={`${id}-value`} data-placeholder={placeholder}>
+				{initialValue}
+			</span>
+		</summary>
+		<div class="panel">
+			{searchable && (
+				<div class="search">
+					<input
+						type="search"
+						id={`${id}-search`}
+						aria-label={`Filter ${label.toLowerCase()}`}
+						placeholder="Type to filter..."
+						autocomplete="off"
+						data-multiselect-search
+					/>
+				</div>
+			)}
+			<ul class="options">
+				{sections.map((section) =>
+					section.group ? (
+						<li class="group" data-group={section.group}>
+							<div class="group-heading" aria-hidden="true">
+								{section.group}
+							</div>
+							<ul aria-label={section.group}>
+								{section.options.map((option) => (
+									<MultiSelectOption
+										{...option}
+										chip={grouped}
+										single={single}
+										name={name}
+										checked={selected.includes(option.value)}
+									/>
+								))}
+							</ul>
+						</li>
+					) : (
+						section.options.map((option) => (
+							<MultiSelectOption
+								{...option}
+								chip={grouped}
+								single={single}
+								name={name}
+								checked={selected.includes(option.value)}
+							/>
+						))
+					),
+				)}
+				{searchable && (
+					<li class="no-match" hidden>
+						No matches
+					</li>
+				)}
+			</ul>
+		</div>
+	</details>
+</div>
+
+<script>
+	import { registerDropdown } from "@factorio-expo/ui/utils/dropdown.ts";
+
+	const dropdowns = document.querySelectorAll<HTMLDetailsElement>("[data-multiselect]");
+
+	for (const dropdown of dropdowns) {
+		if (dropdown.dataset.bound === "true") continue;
+		dropdown.dataset.bound = "true";
+
+		const placeholder =
+			dropdown.querySelector<HTMLElement>(".selected-value")?.dataset.placeholder ?? "";
+		const list = dropdown.querySelector<HTMLUListElement>(".options");
+		const rows = Array.from(
+			list?.querySelectorAll<HTMLLIElement>("li[data-option-order]") ?? [],
+		);
+		const grouped = dropdown.dataset.grouped === "true";
+		const single = dropdown.dataset.single === "true";
+		const search = dropdown.querySelector<HTMLInputElement>("[data-multiselect-search]");
+		const noMatch = dropdown.querySelector<HTMLElement>(".no-match");
+
+		function applyFilter() {
+			if (!search) return;
+			const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+			let visible = 0;
+			for (const row of rows) {
+				const group = row.closest<HTMLElement>("li.group")?.dataset.group ?? "";
+				const text =
+					`${row.querySelector("input")?.dataset.optionLabel ?? ""} ${group}`.toLowerCase();
+				const show = words.every((word) => text.includes(word));
+				row.hidden = !show;
+				if (show) visible += 1;
+			}
+			for (const group of list?.querySelectorAll<HTMLElement>("li.group") ?? []) {
+				group.hidden = !group.querySelector("li[data-option-order]:not([hidden])");
+			}
+			if (noMatch) noMatch.hidden = visible > 0;
+		}
+
+		search?.addEventListener("input", applyFilter);
+		search?.addEventListener("keydown", (event) => {
+			// Enter in the filter box must not submit the surrounding form.
+			if (event.key === "Enter") event.preventDefault();
+		});
+		dropdown.addEventListener("toggle", () => {
+			if (!search) return;
+			if (dropdown.open) {
+				search.focus({ preventScroll: true });
+			} else {
+				search.value = "";
+				applyFilter();
+			}
+		});
+
+		function updateValue() {
+			if (list && !grouped && !single) {
+				const focused = document.activeElement;
+				rows.sort((a, b) => {
+					const aChecked = a.querySelector<HTMLInputElement>("input")?.checked ?? false;
+					const bChecked = b.querySelector<HTMLInputElement>("input")?.checked ?? false;
+					return (
+						Number(bChecked) - Number(aChecked) ||
+						Number(a.dataset.optionOrder) - Number(b.dataset.optionOrder)
+					);
+				});
+				list.append(...rows);
+				if (focused instanceof HTMLElement && list.contains(focused)) {
+					focused.focus({ preventScroll: true });
+				}
+			}
+			const selectedValue = dropdown.querySelector<HTMLElement>(".selected-value");
+			if (!selectedValue) return;
+			const checked = dropdown.querySelectorAll<HTMLInputElement>("input:checked");
+			const labels = Array.from(checked, (input) => input.dataset.optionLabel).filter(
+				(label): label is string => label !== undefined,
+			);
+			selectedValue.textContent = labels.length > 0 ? labels.join(", ") : placeholder;
+		}
+
+		dropdown.addEventListener("change", updateValue);
+		function choose(input: HTMLInputElement) {
+			input.checked = true;
+			input.dispatchEvent(new Event("change", { bubbles: true }));
+			dropdown.open = false;
+			dropdown.querySelector("summary")?.focus();
+		}
+		if (single) {
+			// A pointer click on an option closes the list (the click event of a key press
+			// has no detail); the arrow keys only move the choice (a radio group's own
+			// behaviour), Enter and Space choose and close.
+			dropdown.addEventListener("click", (event) => {
+				if (event.detail === 0) return;
+				if (!(event.target instanceof Element) || !event.target.closest("label")) return;
+				window.setTimeout(() => {
+					dropdown.open = false;
+					dropdown.querySelector("summary")?.focus();
+				}, 0);
+			});
+			dropdown.addEventListener("keydown", (event) => {
+				const input = event.target;
+				if (!(input instanceof HTMLInputElement) || input.type !== "radio") return;
+				if (event.key === "Enter" || event.key === " ") {
+					event.preventDefault();
+					choose(input);
+				}
+			});
+		}
+		registerDropdown({
+			contains: (node) => dropdown.contains(node),
+			close: () => {
+				dropdown.open = false;
+			},
+		});
+		dropdown.addEventListener("keydown", (event) => {
+			if (event.key === "Escape" && dropdown.open) {
+				dropdown.open = false;
+				dropdown.querySelector("summary")?.focus();
+			}
+		});
+
+		dropdown.closest("form")?.addEventListener("reset", () => {
+			window.setTimeout(updateValue, 0);
+		});
+	}
+</script>
+
+<style>
+	.multiselect {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0.5rem;
+		margin-bottom: var(--pico-spacing);
+	}
+
+	details.dropdown {
+		position: relative;
+		width: 100%;
+		min-width: 0;
+		margin: 0;
+		border: 0;
+	}
+
+	details.dropdown[open] {
+		z-index: 100;
+	}
+
+	details.dropdown > summary {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		min-height: calc(
+			1rem * var(--pico-line-height) + var(--pico-form-element-spacing-vertical) * 2 +
+				var(--pico-border-width) * 2
+		);
+		padding: var(--pico-form-element-spacing-vertical)
+			var(--pico-form-element-spacing-horizontal);
+		border: var(--pico-border-width) solid var(--pico-form-element-border-color);
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-form-element-background-color);
+		color: var(--pico-color);
+		list-style: none;
+		cursor: pointer;
+		user-select: none;
+	}
+
+	details.dropdown > summary::-webkit-details-marker {
+		display: none;
+	}
+
+	details.dropdown > summary::after {
+		flex: 0 0 auto;
+		float: none;
+		width: 0.5rem;
+		height: 0.5rem;
+		margin-inline-start: 0.75rem;
+		border: 0;
+		border-right: 1px solid currentColor;
+		border-bottom: 1px solid currentColor;
+		background: none;
+		box-shadow: none;
+		content: "";
+		transform: translateY(-0.125rem) rotate(45deg);
+	}
+
+	details.dropdown[open] > summary::after {
+		transform: translateY(0.125rem) rotate(225deg);
+	}
+
+	.selected-value {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	/* The filter box sits outside the scrolling list, so it can never move. */
+	details.dropdown > .panel {
+		position: absolute;
+		z-index: 101;
+		top: 100%;
+		right: 0;
+		left: 0;
+		display: flex;
+		max-height: 20rem;
+		flex-direction: column;
+		margin: 0.25rem 0 0;
+		overflow: hidden;
+		border: var(--pico-border-width) solid var(--pico-form-element-border-color);
+		border-radius: var(--pico-border-radius);
+		background-color: var(--pico-card-background-color, var(--pico-background-color));
+		box-shadow: var(--pico-dropdown-box-shadow);
+		color: var(--pico-dropdown-color);
+	}
+
+	details.dropdown ul.options {
+		min-height: 0;
+		flex: 1 1 auto;
+		margin: 0;
+		padding: 0 0 0.25rem;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		list-style: none;
+	}
+
+	details.dropdown :global(li) {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	details.dropdown :global(li[hidden]) {
+		display: none;
+	}
+
+	details.dropdown :global(li.group > ul) {
+		margin: 0;
+		padding: 0;
+	}
+
+	/* The framework tints any list item holding a label on hover; a group is not one option. */
+	details.dropdown :global(li.group:hover),
+	details.dropdown :global(li.group:has(label):hover) {
+		background: none;
+	}
+
+	details.dropdown :global(.group-heading) {
+		padding: 0.6rem var(--pico-form-element-spacing-horizontal) 0.3rem;
+		color: var(--pico-muted-color);
+		font-size: 0.75rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	details.dropdown .search {
+		flex: 0 0 auto;
+		padding: 0.5rem;
+		border-bottom: var(--pico-border-width) solid var(--pico-muted-border-color);
+		background-color: var(--pico-card-background-color, var(--pico-background-color));
+	}
+
+	details.dropdown .search input {
+		width: 100%;
+		margin: 0;
+	}
+
+	details.dropdown :global(li.no-match) {
+		padding: 0.5rem var(--pico-form-element-spacing-horizontal);
+		color: var(--pico-muted-color);
+	}
+
+	details.dropdown :global(label) {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		margin: 0;
+		padding: 0.5rem var(--pico-form-element-spacing-horizontal);
+		cursor: pointer;
+	}
+
+	details.dropdown :global(label):hover,
+	details.dropdown :global(label):focus-within {
+		background: var(--pico-dropdown-hover-background-color);
+	}
+
+	details.dropdown :global(input[type="checkbox"]) {
+		flex: 0 0 auto;
+		width: 1.1em;
+		height: 1.1em;
+		margin: 0;
+		accent-color: var(--pico-primary-background);
+	}
+
+	/* Grouped lists show their options as wrapping chips; the summary stays a plain list. */
+	details.dropdown[data-grouped="true"] :global(li.group > ul) {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		padding: 0 var(--pico-form-element-spacing-horizontal) 0.25rem;
+	}
+
+	details.dropdown[data-grouped="true"] :global(li.group > ul > li) {
+		position: relative;
+		width: auto;
+		margin: 0;
+		min-width: 0;
+		max-width: 100%;
+		background: none;
+	}
+
+	/* The chip itself (TagChip) carries the look, including checked and focus. */
+	details.dropdown[data-grouped="true"] :global(label) {
+		width: auto;
+		padding: 0;
+		background: none;
+	}
+
+	/* The checkbox stays in the page for keyboard and screen readers: invisible, stretched over its chip. */
+	details.dropdown[data-grouped="true"] :global(input[type="checkbox"]) {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		opacity: 0;
+		cursor: pointer;
+	}
+
+	/* One choice: the radio stays in the page for keyboard and screen readers, invisible
+	   and stretched over its row; the chosen row is highlighted and the focused one
+	   outlined. */
+	details.dropdown[data-single="true"] :global(li) {
+		position: relative;
+	}
+
+	details.dropdown[data-single="true"] :global(input[type="radio"]) {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		margin: 0;
+		opacity: 0;
+		cursor: pointer;
+	}
+
+	details.dropdown[data-single="true"] :global(label:has(input:checked)) {
+		background: var(--pico-dropdown-hover-background-color);
+		font-weight: 600;
+	}
+
+	details.dropdown[data-single="true"] :global(label:has(input:focus-visible)) {
+		outline: var(--pico-outline-width) solid var(--pico-primary-focus);
+		outline-offset: -2px;
+	}
+
+	details.dropdown > summary:focus-visible,
+	details.dropdown :global(input[type="checkbox"]):focus-visible {
+		outline: var(--pico-outline-width) solid var(--pico-primary-focus);
+		outline-offset: 2px;
+	}
+</style>

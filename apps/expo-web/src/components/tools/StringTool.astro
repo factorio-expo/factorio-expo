@@ -1,0 +1,231 @@
+---
+// "JSON Encode/Decode" page: an exchange string field and a JSON field, each
+// with copy and clear buttons (FieldTools), and the two directions between
+// them; behaviour in string-tool.ts. Side by side (string | actions | JSON)
+// when the content area is wide, stacked otherwise, so the buttons always sit
+// between the fields they connect. The JSON field opens as a text editor; the
+// Tree tab is a read-only view of it (JsonTree.svelte). Both directions run on
+// the API with the upload limits, so an encoded string is one the site
+// accepts. The page may hand in a string already decoded (`/json?from=`).
+import ArrowRight from "@lucide/astro/icons/arrow-right";
+import FieldTools from "./FieldTools.astro";
+import JsonTree from "./JsonTree.svelte";
+
+interface Props {
+	exchange?: string;
+	json?: string;
+	status?: string;
+}
+
+const { exchange = "", json = "", status = "" } = Astro.props;
+---
+
+<form data-string-tool>
+	<fieldset data-string-tool-fields>
+		<div class="tool-layout">
+			<section class="tool-panel tool-string" aria-labelledby="tool-string-label">
+				<div class="tool-panel-head">
+					<label id="tool-string-label" for="tool-string">
+						Exchange string
+					</label>
+					<FieldTools field="tool-string" name="string" drag />
+				</div>
+				<textarea
+					class="mono tool-field"
+					id="tool-string"
+					name="blueprint"
+					rows="10"
+					placeholder="Paste a blueprint or blueprint book exchange string, or drop a text file..."
+					spellcheck="false"
+				>{exchange}</textarea>
+			</section>
+
+			<div class="tool-actions">
+				<button type="button" data-string-tool-decode disabled>
+					Decode to JSON <ArrowRight class="tool-arrow" aria-hidden="true" />
+				</button>
+				<button type="button" data-string-tool-encode disabled>
+					<ArrowRight class="tool-arrow tool-arrow-back" aria-hidden="true" /> Encode to
+					string
+				</button>
+			</div>
+
+			<p class="tool-status" data-string-tool-status role="status" aria-live="polite">
+				{status}
+			</p>
+
+			<section class="tool-panel tool-json" aria-labelledby="tool-json-label">
+				<div class="tool-panel-head">
+					<label id="tool-json-label" for="tool-json">
+						JSON
+					</label>
+					<div role="tablist" aria-label="JSON view" class="tool-tabs">
+						<button
+							type="button"
+							role="tab"
+							id="tool-tab-edit"
+							aria-controls="tool-panel-edit"
+							aria-selected="true"
+						>
+							Edit
+						</button>
+						<button
+							type="button"
+							role="tab"
+							id="tool-tab-tree"
+							aria-controls="tool-panel-tree"
+							aria-selected="false"
+							tabindex="-1"
+						>
+							Tree
+						</button>
+					</div>
+					<FieldTools field="tool-json" name="JSON" />
+				</div>
+				<div role="tabpanel" id="tool-panel-edit" aria-labelledby="tool-tab-edit">
+					<textarea
+						class="mono tool-field"
+						id="tool-json"
+						name="json"
+						rows="10"
+						placeholder='Paste, write or drop a file of blueprint JSON, e.g. {"blueprint": {...}}'
+						spellcheck="false"
+					>{json}</textarea>
+				</div>
+				<div
+					role="tabpanel"
+					id="tool-panel-tree"
+					class="tool-field tool-tree"
+					aria-labelledby="tool-tab-tree"
+					tabindex="0"
+					hidden
+				>
+					<JsonTree sourceId="tool-json" json={json} client:load />
+				</div>
+			</section>
+		</div>
+	</fieldset>
+</form>
+
+<script>
+	import "./string-tool.ts";
+</script>
+
+<style>
+	[data-string-tool] {
+		container-type: inline-size;
+	}
+	[data-string-tool] fieldset {
+		margin: 0;
+	}
+	.tool-layout {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: calc(var(--pico-spacing) * 0.75);
+	}
+	.tool-panel {
+		margin: 0;
+	}
+	.tool-panel-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: calc(var(--pico-spacing) * 0.5);
+		margin-bottom: calc(var(--pico-spacing) * 0.25);
+	}
+	.tool-panel-head label {
+		margin: 0;
+		font-weight: 600;
+	}
+	.tool-field {
+		height: clamp(12rem, 40vh, 36rem);
+		margin: 0;
+		font-size: 0.8rem;
+		resize: vertical;
+	}
+	/* The tree takes the JSON field's place, framed like it. */
+	.tool-tree {
+		overflow: hidden;
+		border: var(--pico-border-width) solid var(--pico-form-element-border-color);
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-form-element-background-color);
+	}
+	.tool-tabs {
+		display: inline-flex;
+		gap: 0.25rem;
+	}
+	.tool-tabs button {
+		margin: 0;
+		padding: 0.2rem 0.75rem;
+		font-size: 0.875rem;
+	}
+	.tool-tabs button[aria-selected="false"] {
+		--pico-background-color: transparent;
+		--pico-border-color: var(--pico-muted-border-color);
+		--pico-color: var(--pico-muted-color);
+	}
+	.tool-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: calc(var(--pico-spacing) * 0.5);
+	}
+	/* One width for both, so wrapped onto two rows they still line up. */
+	.tool-actions button {
+		display: inline-flex;
+		flex: 0 1 12rem;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem;
+		width: auto;
+		margin: 0;
+	}
+	/* Stacked, decode points down to the JSON and encode up to the string. */
+	.tool-actions :global(svg.tool-arrow) {
+		flex: none;
+		width: 1.1rem;
+		height: 1.1rem;
+		transform: rotate(90deg);
+	}
+	.tool-actions :global(svg.tool-arrow-back) {
+		transform: rotate(-90deg);
+	}
+	.tool-status {
+		margin: 0;
+		text-align: center;
+	}
+	@container (min-width: 48rem) {
+		.tool-layout {
+			grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+			grid-template-areas:
+				"string actions json"
+				"status status status";
+		}
+		.tool-string {
+			grid-area: string;
+		}
+		.tool-json {
+			grid-area: json;
+		}
+		.tool-status {
+			grid-area: status;
+		}
+		.tool-actions {
+			grid-area: actions;
+			flex-direction: column;
+			align-self: center;
+		}
+		.tool-actions button {
+			flex: none;
+		}
+		.tool-actions :global(svg.tool-arrow) {
+			transform: none;
+		}
+		.tool-actions :global(svg.tool-arrow-back) {
+			transform: rotate(180deg);
+		}
+		.tool-field {
+			height: clamp(16rem, 60vh, 40rem);
+		}
+	}
+</style>

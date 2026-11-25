@@ -1,0 +1,83 @@
+---
+// Suggested tags under the upload's tag picker, filled by
+// submission/blueprint-inspect.ts from inspect's `suggested_tags`. Clicking a
+// pill ticks that tag and removes the pill; "Add all" ticks every one. Nothing
+// is ticked without a click. Pills are cloned from the template, so they keep
+// TagChip's styles.
+import TagChip from "@components/common/TagChip.astro";
+
+interface Props {
+	/** Prefixes the element ids, like the fields around it. */
+	idPrefix: string;
+}
+
+const { idPrefix } = Astro.props;
+const captionId = `${idPrefix}-tag-suggestions`;
+---
+
+<div class="tag-suggestions" data-tag-suggestions hidden>
+	<small id={captionId}>Suggested tags:</small>
+	<ul aria-labelledby={captionId} data-tag-suggestion-list></ul>
+	<a href="#" data-tag-suggestion-all>
+		Add all
+	</a>
+	<template data-tag-suggestion-template>
+		<li>
+			<button type="button" class="pill">
+				<TagChip label="" />
+			</button>
+		</li>
+	</template>
+</div>
+
+<style>
+	.tag-suggestions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.35rem 0.5rem;
+		margin: calc(var(--pico-spacing) * -0.5) 0 var(--pico-spacing);
+	}
+
+	.tag-suggestions[hidden] {
+		display: none;
+	}
+
+	ul {
+		display: contents;
+	}
+
+	/* Flex, so each pill is as tall as its chip and centres in the row. */
+	li {
+		display: flex;
+		margin: 0;
+		list-style: none;
+	}
+
+	/* Pico styles every button as a primary one, text colour included through
+	 * --pico-color, which the chip reads: take the surrounding text's back. */
+	.pill {
+		--pico-color: inherit;
+		display: flex;
+		width: auto;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: none;
+		box-shadow: none;
+		color: inherit;
+		font: inherit;
+	}
+
+	.pill:hover :global(.tag-chip),
+	.pill:focus-visible :global(.tag-chip) {
+		border-color: var(--pico-primary-background);
+		color: var(--pico-primary);
+	}
+
+	a,
+	small {
+		font-size: 0.85rem;
+		line-height: 1.4;
+	}
+</style>

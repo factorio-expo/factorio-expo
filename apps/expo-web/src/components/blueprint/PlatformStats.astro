@@ -1,0 +1,73 @@
+---
+import Collapsible from "@components/common/Collapsible.astro";
+import type { LeafDetail } from "@lib/api";
+import Info from "@lucide/astro/icons/info";
+
+interface Props {
+	platform: LeafDetail["production"]["space_platform"];
+}
+
+const { platform } = Astro.props;
+---
+
+{platform?.is_space_platform && (
+	<Collapsible title="Space platform">
+		<dl class="platform-stats">
+			<div>
+				<dt>Weight</dt>
+				<dd>{platform.weight_tons?.toFixed(1)} t</dd>
+			</div>
+			<div>
+				<dt>Maximum thrust</dt>
+				<dd>{platform.thrust_mn?.toFixed(1)} MN</dd>
+			</div>
+			<div>
+				<dt>Maximum speed</dt>
+				<dd>
+					{platform.max_speed_km_s?.toFixed(1)} km/s
+					<span
+						role="img"
+						aria-label="Theoretical maximum based on weight and thrust"
+						data-tooltip="Theoretical maximum based on weight and thrust"
+						data-placement="left"
+					>
+						<Info size="16" />
+					</span>
+				</dd>
+			</div>
+		</dl>
+	</Collapsible>
+)}
+
+<style>
+	.platform-stats {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 2rem;
+		margin: 0;
+	}
+
+	.platform-stats > div {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+	}
+
+	.platform-stats dt {
+		color: var(--pico-muted-color);
+		font-size: 0.875rem;
+	}
+
+	.platform-stats dd {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.platform-stats svg {
+		color: var(--pico-primary-background);
+		cursor: pointer;
+	}
+</style>

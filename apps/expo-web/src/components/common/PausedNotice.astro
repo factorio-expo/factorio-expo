@@ -1,0 +1,21 @@
+---
+// Why an action is unavailable: staff paused it from the console
+// (lib/site-pause.ts). Rendered in place of, or above, the disabled form.
+interface Props {
+	message: string;
+}
+const { message } = Astro.props;
+---
+
+<p class="paused-notice" role="status">
+	{message}
+</p>
+
+<style>
+	.paused-notice {
+		padding: 0.75rem 1rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-left: 0.25rem solid var(--pico-primary);
+		border-radius: var(--pico-border-radius);
+	}
+</style>

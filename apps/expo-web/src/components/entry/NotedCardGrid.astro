@@ -1,0 +1,76 @@
+---
+// A card grid where each card has a short note above it (a record's board and
+// value: the home page, /leaderboard) or a caption inside it (a staff pick's,
+// in the book row's place).
+import type { EntryCardData } from "@utils/entry-card.ts";
+import EntryCard from "./EntryCard.astro";
+
+export interface NotedCard {
+	card: EntryCardData;
+	/** The bold first part of the note (a board's name, a place). */
+	label?: string;
+	/** The rest of the note; empty for none. */
+	note?: string;
+	/** A caption shown inside the card where a book's title goes (a staff pick's, a record's). */
+	caption?: string;
+	/** What the caption is, for screen readers. */
+	captionLabel?: string;
+}
+
+interface Props {
+	items: NotedCard[];
+	/** The cards' heading level (3 under a section heading). */
+	headingLevel?: 2 | 3;
+	/** Card count loaded eagerly (above the fold). */
+	eager?: number;
+}
+const { items, headingLevel = 3, eager = 0 } = Astro.props;
+---
+
+<ul class="noted-grid">
+	{items.map((item, index) => (
+		<li data-noted-card>
+			{(item.label || item.note) && (
+				<p class="note">
+					{item.label && <strong>{item.label}</strong>}
+					{item.label && item.note && " · "}
+					{item.note}
+				</p>
+			)}
+			<EntryCard
+				card={item.card}
+				eager={index < eager}
+				headingLevel={headingLevel}
+				caption={item.caption || undefined}
+				captionLabel={item.captionLabel}
+			/>
+		</li>
+	))}
+</ul>
+
+<style>
+	.noted-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+		gap: 1rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.noted-grid > li {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		min-width: 0;
+		margin: 0;
+	}
+	.note {
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--pico-muted-color);
+		overflow-wrap: anywhere;
+	}
+	.note strong {
+		color: var(--pico-color);
+	}
+</style>

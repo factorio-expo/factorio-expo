@@ -1,0 +1,600 @@
+---
+// The entry's facts and actions as one panel next to the preview: who and
+// when, views, which revision; for a blueprint its size, grid and mods; then
+// what the viewer can do: the primary "Copy string" button on top, then
+// favorite, collect, pin (the owner of a public entry), and for editors add a
+// revision or delete the entry, for
+// everyone else report it. It also sends
+// the page-view beacon, so the entry and leaf pages both count a view.
+import { assetUrl } from "@lib/api/public-asset";
+import { LIVE_REGIONS } from "@lib/live-regions";
+import Info from "@lucide/astro/icons/info";
+import ClockPlus from "@lucide/astro/icons/clock-plus";
+import Clipboard from "@lucide/astro/icons/clipboard";
+import ClipboardCheck from "@lucide/astro/icons/clipboard-check";
+import ClipboardX from "@lucide/astro/icons/clipboard-x";
+import HandGrab from "@lucide/astro/icons/hand-grab";
+import Trash from "@lucide/astro/icons/trash";
+import Trophy from "@lucide/astro/icons/trophy";
+import { boardHref, recordLabel } from "@lib/achievements";
+import BlueprintMods from "@components/blueprint/BlueprintMods.astro";
+import { type Entry, type LeafDetail } from "@lib/api";
+import { editorLinks } from "@lib/entry-links";
+import { entryView } from "@lib/entry-view";
+import { aliasPath, sourceHost } from "@lib/entry-source";
+import { isoDate, isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { formatSize, formatSnapToGrid, formatStringSize } from "@utils/production.ts";
+import ProblemContext from "@components/layout/ProblemContext.astro";
+import CompareButton from "./actions/CompareButton.astro";
+import EntryActions from "./actions/EntryActions.astro";
+import PinButton from "./actions/PinButton.astro";
+import ReportEntryButton from "./actions/ReportEntryButton.astro";
+import ShareButton from "./actions/ShareButton.astro";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import RevisionPicker from "./revision/RevisionPicker.astro";
+
+interface Props {
+	entry: Entry;
+	/** The live revision, to tell whether an older one is being viewed. */
+	currentRevisionId?: string;
+	canEdit: boolean;
+	/** Offers favorite and collection buttons; false for a quick preview. */
+	collectable?: boolean;
+	/** Adds the primary "Copy string" button (the string itself is rendered by BlueprintExport). */
+	copyable?: boolean;
+	/** The blueprint shown beside the panel: adds its footprint, grid and mods. */
+	leaf?: LeafDetail;
+}
+
+const {
+	entry,
+	currentRevisionId,
+	canEdit,
+	collectable = true,
+	copyable = false,
+	leaf,
+} = Astro.props;
+const COMPAT_NOTE =
+	"2.1 incompatible: a machine here reads and is controlled by the circuit network on the same wire, which Factorio 2.1 handles differently";
+const footprint = leaf?.production.footprint;
+const measuring = leaf?.production.availability === "pending";
+const revision = entry.revision;
+const viewingOlder = revision !== undefined && revision.id !== currentRevisionId;
+// The new-revision page needs the edit token the entry was opened with; render
+// it into the link so it works before (and without) any script.
+const newRevision = editorLinks(Astro.url).newRevision(entry.id);
+
+// Where an imported blueprint came from, and its vanity alias (an owner's).
+const source = sourceHost(entry.source_url);
+const alias = aliasPath(entry);
+
+const created = entry.created_at;
+// A quick preview shows its expiry in its own panel.
+const expires = entry.quick_preview ? undefined : entry.expires_at;
+const revisionDate = revision?.created_at;
+const view = entryView(entry, { canEdit });
+// What the bug button sends with a report from this page (ProblemReport.astro):
+// what staff need to find the leaf.
+const problemContext = {
+	revision: revision?.version_number,
+	game_version: revision?.game_version,
+	preview_status: leaf?.preview_status,
+	preview_failure: leaf?.preview_failure_code,
+	analysis: leaf?.production.availability,
+};
+// The leaderboard boards this blueprint (on a leaf page) or any blueprint of
+// the entry leads now.
+const records = (entry.records ?? []).filter((record) => !leaf || record.blueprint_id === leaf.id);
+const shareTitle = stripRichText(entry.title || leaf?.label || "Factorio blueprint");
+const viewBeacon = view.sendsViewBeacon
+	? assetUrl(`/api/v1/entries/${encodeURIComponent(entry.id)}/view`)
+	: undefined;
+---
+
+<section class="info" aria-label="Entry details" data-view-beacon={viewBeacon}>
+	{copyable && (
+		<div class="copy-row">
+			<button type="button" class="copy-string" data-copy-string data-copy-state="idle">
+				<Clipboard data-copy-icon="idle" aria-hidden="true" />
+				<ClipboardCheck data-copy-icon="success" aria-hidden="true" />
+				<ClipboardX data-copy-icon="failed" aria-hidden="true" />
+				<span data-copy-label>Copy string</span>
+			</button>
+			<span
+				role="button"
+				class="icon-button"
+				data-drag-string
+				data-tooltip="Drag the string into the game"
+				data-placement="left"
+				aria-label="Drag the string into the game"
+			>
+				<HandGrab aria-hidden="true" />
+			</span>
+		</div>
+	)}
+	<dl>
+		<div>
+			<dt>Uploader</dt>
+			<dd title="Uploader">
+				{entry.owner_username ? (
+					<a href={`/u/${encodeURIComponent(entry.owner_username)}`}>
+						{entry.owner_username}
+					</a>
+				) : (
+					"Anonymous"
+				)}
+			</dd>
+		</div>
+		{source && (
+			<div>
+				<dt>Imported from</dt>
+				<dd data-entry-source>
+					<a href={source.url} rel="nofollow noopener noreferrer" target="_blank">
+						{source.host}
+					</a>
+				</dd>
+			</div>
+		)}
+		{alias && (
+			<div>
+				<dt>Short link</dt>
+				<dd data-entry-alias>
+					<a href={alias}>{alias}</a>
+				</dd>
+			</div>
+		)}
+		{revision?.game_version && (
+			<div>
+				<dt>Game version</dt>
+				<dd title="Game version">
+					{revision.game_version}
+					{leaf?.compat_21 === "incompatible" && (
+						<span
+							class="compat-warning"
+							role="img"
+							aria-label={COMPAT_NOTE}
+							data-tooltip={COMPAT_NOTE}
+							data-placement="left"
+						>
+							<Info size="16" />
+						</span>
+					)}
+				</dd>
+			</div>
+		)}
+		<div>
+			<dt>Created</dt>
+			<dd>
+				<time datetime={created} data-local="date" title={created}>
+					{isoDate(created)}
+				</time>
+			</dd>
+		</div>
+		{revisionDate && (
+			<div>
+				<dt>{viewingOlder ? "Revision created" : "Updated"}</dt>
+				<dd>
+					<time datetime={revisionDate} data-local="date" title={revisionDate}>
+						{isoDate(revisionDate)}
+					</time>
+				</dd>
+			</div>
+		)}
+		{entry.challenges && entry.challenges.length > 0 && (
+			<div>
+				<dt>Challenge</dt>
+				<dd>
+					{entry.challenges.map((challenge, index) => (
+						<>
+							{index > 0 && ", "}
+							<a href={`/challenges/${encodeURIComponent(challenge.slug)}`}>
+								{stripRichText(challenge.title)}
+							</a>
+						</>
+					))}
+				</dd>
+			</div>
+		)}
+		{records.length > 0 && (
+			<div>
+				<dt>{records.length === 1 ? "Record" : "Records"}</dt>
+				<dd class="records" data-entry-records>
+					{records.map((record) => (
+						<a class="record" href={boardHref(record.group, record.board)}>
+							<Trophy aria-hidden="true" />
+							{recordLabel(record)}
+						</a>
+					))}
+				</dd>
+			</div>
+		)}
+		{view.countsViews && (
+			<div>
+				<dt>Views</dt>
+				<dd data-entry-views>{entry.view_count.toLocaleString("en-US")}</dd>
+			</div>
+		)}
+		{view.visibilityNote && (
+			<div>
+				<dt>Visibility</dt>
+				<dd data-entry-visibility>{view.visibilityNote}</dd>
+			</div>
+		)}
+		{expires && (
+			<div>
+				<dt>Expires</dt>
+				<dd>
+					<time datetime={expires} data-local="datetime" data-remaining title={expires}>
+						{isoDateTime(expires)}
+					</time>
+				</dd>
+			</div>
+		)}
+		<div>
+			<dt>Revision</dt>
+			<dd>
+				<RevisionPicker
+					entryId={entry.id}
+					currentRevisionId={currentRevisionId}
+					selectedRevisionId={revision?.id}
+					versionNumber={revision?.version_number}
+				/>
+			</dd>
+		</div>
+	</dl>
+	{leaf && (
+		<>
+			<hr />
+			<dl aria-label="Blueprint facts">
+				{/* Filled in by the analysis: swapped when it arrives (lib/live-regions.ts). */}
+				<div data-live-region={LIVE_REGIONS.footprint}>
+					{(footprint || measuring) && (
+						<>
+							<dt>Footprint</dt>
+							<dd data-footprint>
+								{footprint
+									? `${formatSize(footprint.width, footprint.height)} tiles`
+									: "Measuring…"}
+							</dd>
+						</>
+					)}
+				</div>
+				<div>
+					<dt>Snap to grid</dt>
+					<dd data-snap-to-grid>{formatSnapToGrid(leaf.snap_to_grid)}</dd>
+				</div>
+				<div>
+					<dt>String size</dt>
+					<dd data-string-size>{formatStringSize(leaf.exchange_string)}</dd>
+				</div>
+				<div>
+					<dt>Mods</dt>
+					<dd>
+						<BlueprintMods mods={leaf.mods} />
+					</dd>
+				</div>
+			</dl>
+		</>
+	)}
+	<ProblemContext entryId={entry.id} blueprintId={leaf?.id} context={problemContext} />
+	{leaf && (
+		<small class="problem">
+			<button type="button" class="link-button" data-problem-report-open>
+				Report a problem with this preview
+			</button>
+		</small>
+	)}
+	{viewingOlder && (
+		<p class="older" role="status">
+			You are viewing an older revision. Title, description and tags are shared across all
+			revisions.
+		</p>
+	)}
+	<div class="actions">
+		{collectable && <EntryActions entryId={entry.id} favorited={entry.is_favorited} />}
+		{leaf && view.indexable && <CompareButton blueprintId={leaf.id} />}
+		{view.pinnable && <PinButton entryId={entry.id} pinned={entry.is_pinned} />}
+		{canEdit && (
+			<a
+				data-create-revision
+				class="icon-button"
+				role="button"
+				href={newRevision}
+				aria-label="New revision"
+				data-tooltip="New revision"
+			>
+				<ClockPlus aria-hidden="true" />
+			</a>
+		)}
+		{view.shareable && <ShareButton title={shareTitle} />}
+		{view.reportable && <ReportEntryButton entryId={entry.id} revisionId={revision?.id} />}
+		{canEdit && (
+			<button
+				type="button"
+				class="icon-button"
+				data-delete-entry={entry.id}
+				aria-label="Delete entry"
+				data-tooltip="Delete entry"
+			>
+				<Trash aria-hidden="true" />
+			</button>
+		)}
+	</div>
+	{canEdit && <p class="delete-status" data-delete-status role="status" aria-live="polite" />}
+</section>
+
+<script>
+	import { isSignedIn } from "@lib/auth";
+	import { bindDragString } from "@lib/drag-string";
+	import { browserApi, runAction } from "@lib/browser-action";
+
+	// One view per page load, sent once the page is actually shown (not while
+	// it is prerendered or opened in a background tab).
+	// document.prerendering is not in the DOM typings yet.
+	const shown = () =>
+		document.visibilityState === "visible" &&
+		(document as { prerendering?: boolean }).prerendering !== true;
+	const beacon = document.querySelector<HTMLElement>("[data-view-beacon]")?.dataset.viewBeacon;
+	if (beacon) {
+		const send = () => {
+			if (!shown()) return false;
+			navigator.sendBeacon(beacon);
+			return true;
+		};
+		if (!send()) {
+			const retry = () => {
+				if (!send()) return;
+				document.removeEventListener("visibilitychange", retry);
+				document.removeEventListener("prerenderingchange", retry);
+			};
+			document.addEventListener("visibilitychange", retry);
+			document.addEventListener("prerenderingchange", retry);
+		}
+	}
+
+	// Copies the exchange string BlueprintExport renders on the same page; the
+	// label says how it went, so the result needs no tooltip.
+	const COPY_LABELS = { idle: "Copy string", success: "Copied!", failed: "Copy failed" };
+	for (const handle of document.querySelectorAll<HTMLElement>("[data-drag-string]")) {
+		bindDragString(
+			handle,
+			() =>
+				document.querySelector<HTMLTextAreaElement>("[data-blueprint-export] textarea")
+					?.value ?? "",
+		);
+	}
+	for (const button of document.querySelectorAll<HTMLButtonElement>("[data-copy-string]")) {
+		const label = button.querySelector<HTMLElement>("[data-copy-label]")!;
+		let resetTimer: number | undefined;
+		const setState = (state: keyof typeof COPY_LABELS) => {
+			button.dataset.copyState = state;
+			label.textContent = COPY_LABELS[state];
+			window.clearTimeout(resetTimer);
+			if (state !== "idle") resetTimer = window.setTimeout(() => setState("idle"), 2500);
+		};
+		button.addEventListener("click", async () => {
+			const textarea = document.querySelector<HTMLTextAreaElement>(
+				"[data-blueprint-export] textarea",
+			);
+			if (!textarea) return;
+			try {
+				await navigator.clipboard.writeText(textarea.value);
+				setState("success");
+			} catch {
+				setState("failed");
+			}
+		});
+	}
+	// Soft-deletes the whole entry (every revision) after a confirmation, then
+	// leaves the page, which now 404s.
+	for (const button of document.querySelectorAll<HTMLButtonElement>("[data-delete-entry]")) {
+		const status = button
+			.closest("section")!
+			.querySelector<HTMLElement>("[data-delete-status]")!;
+		button.addEventListener("click", async () => {
+			if (!confirm("Delete this entry and all of its revisions? This cannot be undone."))
+				return;
+			const deleted = await runAction(
+				{
+					status,
+					controls: [button],
+					busy: "Deleting...",
+					fallback: "Could not delete the entry.",
+					onUnauthorized: "clear",
+				},
+				async () => {
+					await browserApi().entries.delete(button.dataset.deleteEntry!);
+					return true;
+				},
+			);
+			if (deleted) location.assign(isSignedIn() ? "/account/entries" : "/");
+		});
+	}
+</script>
+
+<style>
+	/* A yellow note beside the game version: this blueprint is 2.1 incompatible. */
+	.compat-warning {
+		display: inline-flex;
+		margin-left: 0.35rem;
+		color: #e0a800;
+		cursor: help;
+	}
+
+	.compat-warning :global(svg) {
+		vertical-align: text-bottom;
+	}
+
+	/* Leaderboard records: the same primary chip as on a card. */
+	.records {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem;
+	}
+
+	.record {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.05rem 0.55rem;
+		border-radius: 1rem;
+		background: var(--pico-primary-background);
+		color: var(--pico-primary-inverse);
+		font-size: 0.8rem;
+		font-weight: 600;
+		text-decoration: none;
+	}
+
+	.record :global(svg) {
+		width: 0.85rem;
+		height: 0.85rem;
+		flex: none;
+	}
+
+	.info {
+		padding: 1rem 1.25rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+	}
+
+	@media (min-width: 40rem) {
+		.info {
+			margin-bottom: 0;
+		}
+	}
+	.copy-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		max-width: 20rem;
+		margin: 0 0 1rem;
+	}
+	.copy-string {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		width: 100%;
+		/* Full width in the hero's side panel; a book's full-width panel keeps it button-sized. */
+		margin: 0;
+		font-weight: 600;
+	}
+	.copy-string :global(svg) {
+		width: 1.2rem;
+		height: 1.2rem;
+		flex: none;
+	}
+	.copy-string:not([data-copy-state="idle"]) :global([data-copy-icon="idle"]),
+	.copy-string:not([data-copy-state="success"]) :global([data-copy-icon="success"]),
+	.copy-string:not([data-copy-state="failed"]) :global([data-copy-icon="failed"]) {
+		display: none;
+	}
+	.copy-string[data-copy-state="success"] {
+		--pico-background-color: var(--pico-ins-color);
+		--pico-border-color: var(--pico-ins-color);
+	}
+	dl {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 0.5rem 1rem;
+		margin: 0 0 1rem;
+		font-size: 0.9rem;
+	}
+	dl > div {
+		display: contents;
+	}
+	hr {
+		margin: 0 0 1rem;
+	}
+	dt {
+		color: var(--pico-muted-color);
+	}
+	dd {
+		margin: 0;
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+	.problem {
+		display: block;
+		margin-top: 0.5rem;
+	}
+	.older {
+		margin: 0 0 1rem;
+		font-size: 0.85rem;
+		color: var(--pico-muted-color);
+	}
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--pico-muted-border-color);
+	}
+	.actions :global(.entry-actions) {
+		display: contents;
+	}
+	/* Signed out, favorite and collection are hidden, but their wrappers would
+	   still be empty flex items, each adding a gap before the first button. */
+	:global(html:not([data-auth])) .actions :global(.entry-actions) {
+		display: none;
+	}
+	/* Signed out, favorite and collection are hidden (data-auth-only); with no
+	   editor or report buttons either, the row would be just its top border. */
+	:global(html:not([data-auth]))
+		.actions:not(
+			:has(
+				[data-compare],
+				[data-create-revision],
+				[data-delete-entry],
+				[data-report-entry],
+				[data-share]
+			)
+		) {
+		display: none;
+	}
+	:global(html:not([data-auth]))
+		dl:has(
+			+ .actions:not(
+					:has(
+						[data-compare],
+						[data-create-revision],
+						[data-delete-entry],
+						[data-report-entry],
+						[data-share]
+					)
+				)
+		) {
+		margin-bottom: 0;
+	}
+	[data-create-revision] {
+		text-decoration: none;
+	}
+	/* Last in the row, pushed to the right edge, red even on hover. */
+	/* The report button is rendered by ReportEntryButton: matched globally. */
+	.actions :global(.icon-button:is([data-delete-entry], [data-report-entry-open])) {
+		margin-left: auto;
+	}
+	.actions .icon-button[data-delete-entry] {
+		--pico-color: var(--pico-del-color);
+	}
+	.actions .icon-button[data-delete-entry]:not(:disabled):is(:hover, :active) {
+		--pico-color: var(--pico-del-color);
+	}
+	.delete-status {
+		margin: 0.5rem 0 0;
+		font-size: 0.85rem;
+	}
+	.delete-status:empty {
+		display: none;
+	}
+	/* Only very narrow screens stack the facts: two columns fit a phone. */
+	@media (max-width: 22rem) {
+		dl {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 0 1rem;
+		}
+		dd {
+			margin-bottom: 0.5rem;
+		}
+	}
+</style>

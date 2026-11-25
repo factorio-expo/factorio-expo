@@ -1,0 +1,166 @@
+---
+// The entry details fields: title, description, tags, and optionally
+// visibility and expiry. Upload, publishing and the inline edit form all
+// render these and read them with entry-details-form.ts (lib/entry-details.ts),
+// which sends only the fields rendered here.
+import IconPicker from "@factorio-expo/ui/game/icon-picker/IconPicker.astro";
+import MarkdownEditor from "@factorio-expo/ui/forms/markdown-editor/MarkdownEditor.astro";
+import MultiSelect from "@components/form/MultiSelect.astro";
+import type { TagGroup, Visibility } from "@lib/api";
+import { SPOILER_FIELD, TAG_PICKER_FIELD } from "@lib/entry-details";
+import ExpirySelect from "./ExpirySelect.astro";
+import TagSuggestions from "./TagSuggestions.astro";
+import VisibilitySelect from "./VisibilitySelect.astro";
+
+interface Props {
+	/** Prefixes the field ids, so two forms can share a page. */
+	idPrefix: string;
+	tagGroups: TagGroup[];
+	title?: string;
+	description?: string;
+	tags?: string[];
+	/** Renders the visibility select with this choice (owned entries only). */
+	visibility?: Visibility;
+	/** Renders the expiry select; `keep` is the expiry the entry already has. */
+	expiry?: { keep?: string };
+	/** Comments a change away from public would delete (asked before saving). */
+	commentCount?: number;
+	/** Renders the suggested-tags row under the tag picker (uploads). */
+	tagSuggestions?: boolean;
+	/** The spoiler/NSFW checkbox's state. */
+	spoiler?: boolean;
+	/** Renders the vanity alias field (signed-in owners only): `current` is the alias it has. */
+	alias?: { username: string; current: string };
+}
+
+const {
+	idPrefix,
+	tagGroups,
+	title = "",
+	description = "",
+	tags = [],
+	visibility,
+	expiry,
+	commentCount = 0,
+	tagSuggestions = false,
+	spoiler = false,
+	alias,
+} = Astro.props;
+const id = (field: string) => `${idPrefix}-${field}`;
+const tagOptions = tagGroups.flatMap((group) =>
+	group.tags.map((tag) => ({
+		value: tag.slug,
+		label: tag.display_name,
+		icon: tag.icon,
+		group: group.display_name,
+	})),
+);
+---
+
+<div data-entry-details data-comment-count={commentCount}>
+	<IconPicker targetId={id("title")}>
+		<label slot="label" for={id("title")}>
+			Entry title
+		</label>
+		<input id={id("title")} name="title" type="text" maxlength="160" value={title} required />
+	</IconPicker>
+	<IconPicker targetId={id("description")}>
+		<label slot="label" for={id("description")}>
+			Entry description <small>(optional, Markdown supported)</small>
+		</label>
+		<MarkdownEditor id={id("description")} value={description} />
+	</IconPicker>
+	{tagOptions.length > 0 ? (
+		<>
+			<input type="hidden" name={TAG_PICKER_FIELD} value="" />
+			<MultiSelect
+				id={id("tags")}
+				name="tags"
+				label="Tags (optional, select multiple)"
+				selected={tags}
+				placeholder="Select tags..."
+				options={tagOptions}
+				searchable
+			/>
+			{tagSuggestions && <TagSuggestions idPrefix={idPrefix} />}
+		</>
+	) : (
+		<p>Tag options are unavailable right now.</p>
+	)}
+	<input type="hidden" name={SPOILER_FIELD} value="" />
+	<div class="spoiler-field">
+		<label for={id("spoiler")}>
+			<input
+				type="checkbox"
+				id={id("spoiler")}
+				name="spoiler"
+				checked={spoiler}
+				aria-describedby={id("spoiler-hint")}
+			/>
+			Spoiler or NSFW
+		</label>
+		<small id={id("spoiler-hint")}>
+			Previews stay hidden until a viewer reveals them, and search leaves it out by default.
+		</small>
+	</div>
+	{alias && (
+		<div class="alias-field">
+			<label for={id("alias")}>
+				Short link <small>(optional)</small>
+			</label>
+			<div class="alias-input">
+				<span aria-hidden="true">/@{alias.username}/</span>
+				<input
+					id={id("alias")}
+					name="alias"
+					type="text"
+					value={alias.current}
+					minlength="3"
+					maxlength="60"
+					autocapitalize="none"
+					autocomplete="off"
+					spellcheck="false"
+					aria-describedby={id("alias-hint")}
+				/>
+			</div>
+			<small id={id("alias-hint")}>
+				Lowercase letters, digits and hyphens, 3 to 60 characters. The entry is also served
+				at this link; changing it makes the old one stop working.
+			</small>
+		</div>
+	)}
+	{visibility && <VisibilitySelect id={id("visibility")} selected={visibility} />}
+	{expiry && <ExpirySelect id={id("expiry")} current={expiry.keep} />}
+</div>
+
+<style>
+	.spoiler-field {
+		margin-bottom: var(--pico-spacing);
+	}
+
+	.spoiler-field label {
+		margin-bottom: 0.25rem;
+	}
+
+	.spoiler-field small,
+	.alias-field small {
+		color: var(--pico-muted-color);
+	}
+
+	.alias-field {
+		margin-bottom: var(--pico-spacing);
+	}
+
+	.alias-input {
+		display: flex;
+		align-items: baseline;
+		gap: 0.25rem;
+		overflow-wrap: anywhere;
+	}
+
+	.alias-input input {
+		flex: 1;
+		min-width: 0;
+		margin-bottom: 0.25rem;
+	}
+</style>

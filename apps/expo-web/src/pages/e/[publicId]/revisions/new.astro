@@ -1,0 +1,34 @@
+---
+import SubmissionForm from "@components/submission/SubmissionForm.astro";
+import Page from "@layouts/Page.astro";
+import { getServerApiClient } from "@lib/api/server";
+import { loadEntryAccess } from "@lib/entry-access";
+import { editorLinks } from "@lib/entry-links";
+import { uploadPause } from "@lib/site-pause";
+import { getSiteStatus } from "@lib/site-status";
+import { allowGuestTurnstile } from "@lib/turnstile";
+import { getViewer } from "@lib/viewer";
+import { PUBLIC_TURNSTILE_SITE_KEY } from "astro:env/client";
+
+const { publicId } = Astro.params;
+const api = getServerApiClient(Astro);
+const access = await loadEntryAccess(api, publicId!);
+if (!access) return Astro.rewrite("/404");
+// A quick preview takes no revisions until it is published (canEdit false).
+const { entry, canEdit } = access;
+const back = editorLinks(Astro.url).entry(publicId!);
+const signedIn = (await getViewer(Astro)).state === "in";
+const paused = uploadPause(await getSiteStatus(), signedIn);
+// A signed-out revision (edit link) passes Turnstile.
+allowGuestTurnstile(Astro.csp, PUBLIC_TURNSTILE_SITE_KEY, signedIn);
+---
+
+<Page title="Create revision" noindex>
+	<a href={back}>Back to entry</a>
+	<h1>Create a revision</h1>
+	<p>
+		Replace the current exchange string below. Saving creates a new immutable revision and keeps
+		previous revisions available.
+	</p>
+	<SubmissionForm entry={entry} canEdit={canEdit} paused={paused} />
+</Page>

@@ -1,0 +1,42 @@
+---
+// JSON Encode/Decode. `?from={node id}` opens a book, blueprint or planner of
+// an entry the viewer may see, already decoded (BlueprintExport links here).
+import StringTool from "@components/tools/StringTool.astro";
+import Page from "@layouts/Page.astro";
+import { ApiError } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server.ts";
+
+const from = Astro.url.searchParams.get("from");
+let exchange = "";
+let json = "";
+let status = "";
+if (from) {
+	const api = getServerApiClient(Astro);
+	try {
+		exchange = (await api.blueprints.exportNode(from)).exchange_string;
+		json = JSON.stringify(await api.blueprints.decode(exchange), null, 2);
+		status = "Decoded.";
+	} catch (err) {
+		if (!(err instanceof ApiError)) console.error("json page: load node", err);
+		status =
+			err instanceof ApiError && err.status === 404
+				? "That blueprint does not exist or is not visible to you."
+				: "Could not load that blueprint.";
+	}
+}
+---
+
+<Page
+	title="JSON Encode/Decode"
+	nav="string-tool"
+	description="Decode a Factorio blueprint exchange string to JSON, or encode edited JSON back into a blueprint string, in your browser."
+	noindex={from !== null}
+>
+	<h1>JSON Encode/Decode</h1>
+	<p>
+		Paste an exchange string and decode it into the JSON Factorio stores, or paste or edit JSON
+		and encode it into a string. Nothing is saved. An encoded string must still be a blueprint
+		or book within the upload limits.
+	</p>
+	<StringTool exchange={exchange} json={json} status={status} />
+</Page>

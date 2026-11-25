@@ -1,0 +1,177 @@
+---
+// One challenge: its goal and restrictions, dates, description, the viewer's
+// entry, and the entries (ranked when scores show) with votes. Writes go
+// through components/challenge/challenge.ts, which reloads the page.
+import ArrowLeft from "@lucide/astro/icons/arrow-left";
+import ChallengeDates from "@components/challenge/ChallengeDates.astro";
+import ChallengeEntries from "@components/challenge/ChallengeEntries.astro";
+import ChallengeIcon from "@components/challenge/ChallengeIcon.astro";
+import ChallengeSubmit from "@components/challenge/ChallengeSubmit.astro";
+import Page from "@layouts/Page.astro";
+import { ApiError } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server";
+import { loginPath } from "@lib/safe-next";
+import { getViewer } from "@lib/viewer";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { renderMarkdown } from "@utils/markdown";
+import { metaDescription } from "@utils/meta.ts";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+
+const { slug } = Astro.params;
+const api = getServerApiClient(Astro);
+let challenge;
+try {
+	challenge = await api.challenges.get(slug!);
+} catch (err) {
+	if (err instanceof ApiError && err.status === 404) return Astro.rewrite("/404");
+	throw err;
+}
+const viewer = await getViewer(Astro);
+const signedIn = viewer.state === "in";
+const login = loginPath(Astro.url.pathname);
+
+const votingOpen =
+	challenge.voting_enabled && (challenge.status === "open" || challenge.status === "judging");
+const statusLabel = {
+	draft: "Draft",
+	upcoming: "Upcoming",
+	open: "Open",
+	judging: "Voting",
+	closed: "Closed",
+}[challenge.status];
+const description = metaDescription(
+	challenge.summary || challenge.description,
+	`Factorio design challenge: ${stripRichText(challenge.rules.goal)}.`,
+);
+---
+
+<Page
+	title={`Challenge: ${stripRichText(challenge.title)}`}
+	nav="challenges"
+	description={description}
+>
+	<nav class="back">
+		<a href="/challenges">
+			<ArrowLeft aria-hidden="true" /> All challenges
+		</a>
+	</nav>
+	<header class="challenge-header">
+		<p class="muted">
+			Challenge · <span class:list={["status", challenge.status]}>{statusLabel}</span>
+		</p>
+		<h1>
+			<ChallengeIcon icons={challenge.icons} size="2.5rem" />
+			<span set:html={formatRichText(challenge.title)} />
+		</h1>
+		{challenge.summary && <p class="summary" set:html={formatRichText(challenge.summary)} />}
+		<ChallengeDates challenge={challenge} />
+	</header>
+
+	<section class="rules" aria-labelledby="rules-heading">
+		<h2 id="rules-heading">Goal</h2>
+		<p class="goal" set:html={formatRichText(challenge.rules.goal)} />
+		<h3>Rules</h3>
+		<ul>
+			{challenge.rules.restrictions.map((line) => (
+				<li set:html={formatRichText(line)} />
+			))}
+		</ul>
+		<p class="muted">
+			Ties go to the entry whose scored revision was uploaded first.
+			{challenge.voting_enabled &&
+				` Every account gets ${challenge.votes_per_user} ${challenge.votes_per_user === 1 ? "vote" : "votes"}, never on its own entry${challenge.voters_before_start ? ", and only accounts made before the start can vote" : ""}.`}
+		</p>
+	</section>
+
+	{challenge.description && (
+		<section class="description" set:html={renderMarkdown(challenge.description)} />
+	)}
+
+	{challenge.status === "open" && (
+		<ChallengeSubmit
+			slug={challenge.slug}
+			signedIn={signedIn}
+			login={login}
+			viewer={challenge.viewer}
+			entries={challenge.entries}
+		/>
+	)}
+
+	<section aria-labelledby="entries-heading">
+		<h2 id="entries-heading">
+			{challenge.status === "closed" ? "Results" : "Entries"} ({challenge.entry_count})
+		</h2>
+		{votingOpen && (
+			<p data-vote-summary>
+				{!signedIn ? (
+					<>
+						<a href={login}>Log in</a> to vote for your favorite entries.
+					</>
+				) : challenge.viewer?.can_vote ? (
+					(challenge.viewer.vote_block ??
+					`You have ${challenge.viewer.votes_left} of ${challenge.votes_per_user} votes left.`)
+				) : (
+					challenge.viewer?.vote_block
+				)}
+			</p>
+		)}
+		{!challenge.scores_visible && challenge.entries.length > 0 && (
+			<p class="muted">Scores stay hidden until the deadline.</p>
+		)}
+		{challenge.entries.length === 0 ? (
+			<p>No entries yet.</p>
+		) : (
+			<ChallengeEntries challenge={challenge} />
+		)}
+	</section>
+</Page>
+
+<script>
+	import "@components/challenge/challenge.ts";
+</script>
+
+<style>
+	.back {
+		margin-bottom: 1rem;
+	}
+	.back a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+	.challenge-header h1 {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.5rem;
+	}
+	.challenge-header > p {
+		margin-bottom: 0.25rem;
+	}
+	.muted {
+		color: var(--pico-muted-color);
+	}
+	.status {
+		font-weight: 600;
+	}
+	.status.open {
+		color: var(--pico-ins-color);
+	}
+	.rules {
+		margin: 1.5rem 0;
+		padding: 1rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+	}
+	.rules h2,
+	.rules h3 {
+		margin-bottom: 0.5rem;
+	}
+	.goal {
+		font-size: 1.15rem;
+		font-weight: 600;
+	}
+	.description {
+		margin-bottom: 1.5rem;
+	}
+</style>

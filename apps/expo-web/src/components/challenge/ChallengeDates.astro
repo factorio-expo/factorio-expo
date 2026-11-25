@@ -1,0 +1,74 @@
+---
+// A challenge's dates by status: when it starts, its deadline with the time
+// left, when voting ends, or when it ended. Server text is UTC; the page's
+// script shows local times (upgradeTimes).
+import type { Challenge } from "@lib/api";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+
+interface Props {
+	challenge: Challenge;
+	/** One line for cards. */
+	compact?: boolean;
+}
+const { challenge, compact = false } = Astro.props;
+
+const rows: { label: string; at: string; remaining?: boolean }[] = [];
+switch (challenge.status) {
+	case "upcoming":
+		rows.push({ label: "Starts", at: challenge.starts_at, remaining: true });
+		if (!compact) rows.push({ label: "Deadline", at: challenge.ends_at });
+		break;
+	case "open":
+		rows.push({ label: "Deadline", at: challenge.ends_at, remaining: true });
+		if (!compact && challenge.voting_enabled)
+			rows.push({ label: "Voting ends", at: challenge.voting_ends_at });
+		break;
+	case "judging":
+		rows.push({ label: "Voting ends", at: challenge.voting_ends_at, remaining: true });
+		break;
+	default:
+		rows.push({ label: "Ended", at: challenge.voting_ends_at });
+}
+if (!compact && challenge.status !== "upcoming")
+	rows.unshift({ label: "Started", at: challenge.starts_at });
+---
+
+<dl class:list={["challenge-dates", { compact }]}>
+	{rows.map((row) => (
+		<div>
+			<dt>{row.label}</dt>
+			<dd>
+				<time
+					datetime={row.at}
+					data-local="datetime"
+					data-remaining={row.remaining ? "" : undefined}
+					title={row.at}
+				>
+					{isoDateTime(row.at)}
+				</time>
+			</dd>
+		</div>
+	))}
+</dl>
+
+<style>
+	.challenge-dates {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 1.5rem;
+		margin: 0;
+	}
+	.challenge-dates div {
+		display: flex;
+		gap: 0.4rem;
+	}
+	.challenge-dates dt {
+		font-weight: 600;
+	}
+	.challenge-dates dd {
+		margin: 0;
+	}
+	.compact {
+		font-size: 0.875rem;
+	}
+</style>

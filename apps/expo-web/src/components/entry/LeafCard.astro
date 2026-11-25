@@ -1,0 +1,148 @@
+---
+// One blueprint of a book as a small card (TreeNode lays consecutive ones out
+// in a grid): its preview thumbnail, icons and label, linking to the leaf
+// page. A preview still rendering shows Pico's spinner, a failed or missing
+// one the site icon; tree-live.ts follows the pending ones and swaps the tree in.
+import { assetUrl } from "@lib/api/public-asset";
+import { type Node } from "@lib/api";
+import BlueprintIcon from "@components/common/BlueprintIcon.astro";
+import { formatRichTextSummary } from "@factorio-expo/ui/game/rich-text.ts";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+
+interface Props {
+	node: Node;
+	href: string;
+}
+
+const { node, href } = Astro.props;
+const label = node.label || "Unnamed blueprint";
+const thumbnail = node.preview ? assetUrl(node.preview.thumbnail_url) : undefined;
+const pending = !thumbnail && node.preview_status === "pending";
+const entities = node.entity_count;
+---
+
+<a
+	class="leaf-card"
+	href={href}
+	data-blueprint-id={node.id}
+	data-preview-pending={pending ? "" : undefined}
+>
+	<div
+		class="thumb"
+		data-empty={thumbnail || pending ? undefined : ""}
+		aria-busy={pending ? "true" : undefined}
+	>
+		{thumbnail && (
+			<img
+				src={thumbnail}
+				width={node.preview!.thumbnail_width}
+				height={node.preview!.thumbnail_height}
+				alt={stripRichText(label)}
+				loading="lazy"
+				decoding="async"
+			/>
+		)}
+		{pending && <span class="visually-hidden">Preview is rendering</span>}
+	</div>
+	<div class="caption">
+		<BlueprintIcon kind={node.kind} icons={node.icons} />
+		<span class="label" set:html={formatRichTextSummary(label)} />
+	</div>
+	{entities !== undefined && (
+		<small class="meta">
+			{entities.toLocaleString("en-US")} {entities === 1 ? "entity" : "entities"}
+		</small>
+	)}
+</a>
+
+<style>
+	.leaf-card {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		overflow: hidden;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-card-background-color);
+		color: inherit;
+		text-decoration: none;
+		transition:
+			border-color 0.15s,
+			transform 0.15s;
+	}
+
+	.leaf-card:hover,
+	.leaf-card:focus-visible {
+		border-color: var(--pico-primary);
+		transform: translateY(-2px);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.leaf-card {
+			transition: none;
+		}
+		.leaf-card:hover,
+		.leaf-card:focus-visible {
+			transform: none;
+		}
+	}
+
+	.thumb {
+		position: relative;
+		aspect-ratio: 4 / 3;
+		background: var(--pico-muted-border-color) center / 30% no-repeat;
+	}
+
+	.thumb[data-empty] {
+		background-image: url("/favicon.png");
+	}
+
+	.thumb[aria-busy="true"]::before {
+		position: absolute;
+		top: calc(50% - 0.75rem);
+		left: calc(50% - 0.75rem);
+		width: 1.5rem;
+		height: 1.5rem;
+		margin: 0;
+		background-size: 1.5rem auto;
+	}
+
+	/* Out of flow, so a tall thumbnail cannot stretch the 4:3 box. */
+	.thumb img {
+		position: absolute;
+		inset: 0;
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+	}
+
+	.caption {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.35rem;
+		padding: 0.5rem 0.6rem 0;
+		font-size: 0.875rem;
+		font-weight: 600;
+		line-height: 1.3;
+	}
+
+	.caption :global(.blueprint-icon) {
+		font-size: 1.1rem;
+	}
+
+	.label {
+		display: -webkit-box;
+		overflow: hidden;
+		overflow-wrap: anywhere;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+	}
+
+	.meta {
+		margin-top: auto;
+		padding: 0.25rem 0.6rem 0.5rem;
+		color: var(--pico-muted-color);
+		font-size: 0.75rem;
+	}
+</style>

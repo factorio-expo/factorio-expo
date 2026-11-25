@@ -1,0 +1,219 @@
+---
+// What a planner does: an upgrade planner's from -> to rows, or a
+// deconstruction planner's settings and filters (docs/frontend.md "Planners").
+// Icons carry the names and quality conditions as tooltips.
+import ArrowRight from "@lucide/astro/icons/arrow-right";
+import Chip from "@components/common/Chip.astro";
+import type { DeconstructionSettings, PlannerFilter, PlannerKind, UpgradeSettings } from "@lib/api";
+import { formatToken } from "@factorio-expo/ui/game/icon-token.ts";
+import {
+	deconstructionSummary,
+	filterIconType,
+	filterLabel,
+	isSpecialFilter,
+	targetLabel,
+} from "@lib/planners";
+
+interface Props {
+	kind: PlannerKind;
+	settings?: UpgradeSettings | DeconstructionSettings;
+}
+
+const { kind, settings } = Astro.props;
+const upgrade = kind === "upgrade_planner" ? (settings as UpgradeSettings | undefined) : undefined;
+const deconstruction =
+	kind === "deconstruction_planner"
+		? (settings as DeconstructionSettings | undefined)
+		: undefined;
+
+const token = (filter: PlannerFilter, fallback: "entity" | "tile") =>
+	formatToken({
+		type: filterIconType(filter, fallback),
+		name: filter.name,
+		quality: filter.quality ?? "",
+	});
+// The comparator shows as the chip's badge; "=" goes unsaid.
+const comparator = (filter: PlannerFilter) =>
+	filter.quality && filter.comparator && filter.comparator !== "=" ? filter.comparator : "";
+const mappers = upgrade?.mappers ?? [];
+const entityFilters = deconstruction?.entity_filters ?? [];
+const tileFilters = deconstruction?.tile_filters ?? [];
+const special = entityFilters.filter((filter) => isSpecialFilter(filter.name));
+const entities = entityFilters.filter((filter) => !isSpecialFilter(filter.name));
+const showTiles = deconstruction?.tile_selection_mode !== "never" && tileFilters.length > 0;
+---
+
+{upgrade && (
+	<div class="planner-settings">
+		{mappers.length === 0 ? (
+			<p>
+				<small>No upgrades set.</small>
+			</p>
+		) : (
+			<ul class="mappings" aria-label="Upgrades">
+				{mappers.map((mapper) => (
+					<li class="mapping">
+						{mapper.from ? (
+							<Chip
+								iconToken={token(mapper.from, "entity")}
+								label={filterLabel(mapper.from)}
+							>
+								{comparator(mapper.from)}
+							</Chip>
+						) : (
+							<span class="empty-slot" aria-label="Empty" />
+						)}
+						<ArrowRight class="arrow" aria-label="to" />
+						{mapper.to ? (
+							<Chip
+								iconToken={token(mapper.to, "entity")}
+								label={targetLabel(mapper.to)}
+							/>
+						) : (
+							<span class="empty-slot" aria-label="Empty" />
+						)}
+					</li>
+				))}
+			</ul>
+		)}
+	</div>
+)}
+
+{deconstruction && (
+	<div class="planner-settings">
+		<ul class="summary">
+			{deconstructionSummary(deconstruction).map((line) => (
+				<li>{line}</li>
+			))}
+		</ul>
+		{!deconstruction.trees_and_rocks_only && special.length > 0 && (
+			<ul class="special" aria-label="Special filters">
+				{special.map((filter) => (
+					<li>
+						<Chip iconToken={token(filter, "entity")} label={filterLabel(filter)} />
+						<span>{filterLabel(filter)}</span>
+					</li>
+				))}
+			</ul>
+		)}
+		{!deconstruction.trees_and_rocks_only && entities.length > 0 && (
+			<div class="filters">
+				<h3>
+					{deconstruction.entity_filter_mode === "blacklist"
+						? "Excluded entities"
+						: "Entities"}
+				</h3>
+				<ul class="chips">
+					{entities.map((filter) => (
+						<li>
+							<Chip iconToken={token(filter, "entity")} label={filterLabel(filter)}>
+								{comparator(filter)}
+							</Chip>
+						</li>
+					))}
+				</ul>
+			</div>
+		)}
+		{showTiles && (
+			<div class="filters">
+				<h3>
+					{deconstruction.tile_filter_mode === "blacklist" ? "Excluded tiles" : "Tiles"}
+				</h3>
+				<ul class="chips">
+					{tileFilters.map((filter) => (
+						<li>
+							<Chip iconToken={token(filter, "tile")} label={filterLabel(filter)} />
+						</li>
+					))}
+				</ul>
+			</div>
+		)}
+	</div>
+)}
+
+<style>
+	.planner-settings {
+		margin-bottom: 1rem;
+	}
+
+	ul {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	li {
+		list-style: none;
+	}
+
+	.mappings {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+		gap: 0.35rem 1rem;
+	}
+
+	.mapping {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin: 0;
+	}
+
+	.mapping :global(.arrow) {
+		flex: none;
+		width: 1rem;
+		height: 1rem;
+		color: var(--pico-muted-color);
+	}
+
+	.empty-slot {
+		display: inline-block;
+		width: 2.25rem;
+		height: 2.25rem;
+		border: 1px dashed var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+	}
+
+	.summary {
+		margin-bottom: 0.75rem;
+	}
+
+	.summary li {
+		margin: 0 0 0.15rem;
+	}
+
+	.summary li::before {
+		content: "• ";
+		color: var(--pico-muted-color);
+	}
+
+	.special {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 1.25rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.special li {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0;
+	}
+
+	.filters h3 {
+		margin: 0.5rem 0 0.35rem;
+		font-size: 0.875rem;
+		color: var(--pico-muted-color);
+	}
+
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+	}
+
+	.chips li {
+		margin: 0;
+	}
+</style>

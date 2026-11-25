@@ -1,0 +1,438 @@
+---
+// Two blueprints side by side: /compare?a={leaf id}&b={leaf id}. Only public
+// blueprints that are not quick previews; an unknown or hidden id is a 404.
+// The metric table is lib/compare.ts; thumbnails sit side by side on wide
+// screens and stacked on narrow ones.
+import { assetUrl } from "@lib/api/public-asset";
+import BlueprintHeading from "@components/blueprint/BlueprintHeading.astro";
+import SpoilerGate from "@components/entry/SpoilerGate.astro";
+import Page from "@layouts/Page.astro";
+import { type CompareLeaf } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server";
+import { unlessMissing } from "@lib/entry-access";
+import { analysed, compareGroups } from "@lib/compare";
+import { leafPath } from "@lib/entry-links";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+
+const aId = Astro.url.searchParams.get("a");
+const bId = Astro.url.searchParams.get("b");
+if (!aId || !bId || aId === bId) return Astro.rewrite("/404");
+const result = await unlessMissing(getServerApiClient(Astro).compare.leaves(aId, bId));
+if (!result) return Astro.rewrite("/404");
+
+const sides = [
+	{ key: "A", leaf: result.a },
+	{ key: "B", leaf: result.b },
+];
+const groups = compareGroups(result.a, result.b);
+
+const name = (leaf: CompareLeaf) => stripRichText(leaf.label || leaf.entry_title) || "Blueprint";
+const swapped = `/compare?a=${encodeURIComponent(bId)}&b=${encodeURIComponent(aId)}`;
+const waiting = sides.filter((side) => !analysed(side.leaf));
+---
+
+<Page
+	title={`Compare: ${name(result.a)} and ${name(result.b)}`}
+	description="Two Factorio blueprints side by side: production rates, power, size and build cost."
+	noindex
+>
+	<h1>Compare blueprints</h1>
+	<p class="actions">
+		<a href={swapped} data-compare-swap>
+			Swap A and B
+		</a>
+		<a href="/browse">Browse blueprints</a>
+	</p>
+
+	<div class="previews">
+		{sides.map(({ key, leaf }) => (
+			<section class="side" aria-label={`Blueprint ${key}`} data-compare-side={key}>
+				<div class="title">
+					<span class="badge">{key}</span>
+					<a href={leafPath(leaf.entry_id, leaf.id)}>
+						<BlueprintHeading
+							level="h2"
+							icons={leaf.icons}
+							label={leaf.label || leaf.entry_title}
+						/>
+					</a>
+				</div>
+				<p class="by">
+					{leaf.owner_username ? (
+						<>
+							by{" "}
+							<a href={`/u/${encodeURIComponent(leaf.owner_username)}`}>
+								{leaf.owner_username}
+							</a>
+						</>
+					) : (
+						"Anonymous"
+					)}
+					{leaf.entry_title && leaf.entry_title !== leaf.label && (
+						<>
+							· <span set:html={formatRichText(leaf.entry_title)} />
+						</>
+					)}
+				</p>
+				<SpoilerGate spoiler={leaf.spoiler}>
+					<a class="thumb" href={leafPath(leaf.entry_id, leaf.id)}>
+						{leaf.preview ? (
+							<img
+								src={assetUrl(leaf.preview.thumbnail_url)}
+								width={leaf.preview.thumbnail_width}
+								height={leaf.preview.thumbnail_height}
+								alt={`Preview of ${name(leaf)}`}
+							/>
+						) : (
+							<span class="no-preview">No preview yet</span>
+						)}
+					</a>
+				</SpoilerGate>
+			</section>
+		))}
+	</div>
+
+	{waiting.length > 0 && (
+		<p role="status" class="note" data-compare-waiting>
+			{waiting.map((side) => side.key).join(" and ")}
+			{waiting.length === 1 ? " has" : " have"} no finished analysis yet, so its figures show
+			—.
+		</p>
+	)}
+
+	<figure class="table-wrap">
+		<table data-compare-table>
+			<thead>
+				<tr>
+					<th scope="col">Metric</th>
+					<th scope="col">A</th>
+					<th scope="col">B</th>
+				</tr>
+			</thead>
+			{groups.map((group) => (
+				<tbody data-compare-group={group.id}>
+					<tr class="group">
+						<th scope="colgroup" colspan="3">
+							{group.title}
+						</th>
+					</tr>
+					{group.rows.map((row) => (
+						<tr data-compare-row={row.id}>
+							<th scope="row">
+								<span class="metric">
+									{row.iconToken && (
+										<span
+											class="icon"
+											set:html={formatRichText(row.iconToken)}
+										/>
+									)}
+									{row.label}
+								</span>
+							</th>
+							{(["a", "b"] as const).map((side) => (
+								<td
+									data-side={side.toUpperCase()}
+									class:list={{
+										larger: row.larger === side,
+										smaller: row.larger !== undefined && row.larger !== side,
+									}}
+								>
+									{row[side]}
+									{row.larger && (
+										<span class="visually-hidden">
+											({row.larger === side ? "higher" : "lower"})
+										</span>
+									)}
+								</td>
+							))}
+						</tr>
+					))}
+					{group.omitted > 0 && (
+						<tr class="omitted">
+							<td colspan="3">and {group.omitted} more</td>
+						</tr>
+					)}
+				</tbody>
+			))}
+		</table>
+	</figure>
+</Page>
+
+<script>
+	// Reached by a link or typed in, the pick may still be set: it is spent.
+	import { pickLeaf, tabStorage } from "@lib/compare-pick";
+
+	const store = tabStorage();
+	if (store) pickLeaf(store);
+</script>
+
+<style>
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 1.5rem;
+	}
+
+	.previews {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1.5rem;
+		margin-bottom: 1.5rem;
+	}
+
+	@media (max-width: 40rem) {
+		.previews {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+
+	.side {
+		min-width: 0;
+	}
+
+	.title {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0;
+	}
+
+	.title a {
+		min-width: 0;
+		text-decoration: none;
+	}
+
+	.title :global(.blueprint-heading) {
+		margin: 0;
+		font-size: 1.25rem;
+		overflow-wrap: anywhere;
+	}
+
+	.badge {
+		flex: none;
+		display: inline-grid;
+		place-items: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 50%;
+		background: var(--pico-primary-background);
+		color: var(--pico-primary-inverse);
+		font-size: 0.9rem;
+	}
+
+	.by {
+		margin: 0.25rem 0 0.75rem;
+		color: var(--pico-muted-color);
+		font-size: 0.9rem;
+		overflow-wrap: anywhere;
+	}
+
+	.thumb {
+		display: grid;
+		place-items: center;
+		min-height: 8rem;
+		padding: 0.5rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-card-sectioning-background-color);
+	}
+
+	.thumb img {
+		display: block;
+		max-width: 100%;
+		max-height: 20rem;
+		width: auto;
+		height: auto;
+		object-fit: contain;
+	}
+
+	.no-preview {
+		color: var(--pico-muted-color);
+	}
+
+	.note {
+		color: var(--pico-muted-color);
+	}
+
+	/* Compact on desktop: a narrow table, not stretched over the 90rem page. */
+	.table-wrap {
+		max-width: 46rem;
+		margin: 0;
+	}
+
+	table {
+		table-layout: fixed;
+		width: 100%;
+		margin: 0;
+		border-collapse: separate;
+		border-spacing: 0;
+		font-size: 0.9rem;
+	}
+
+	th,
+	td {
+		padding: 0.25rem 0.6rem;
+		border: 0;
+		border-bottom: 1px solid var(--pico-muted-border-color);
+		line-height: 1.35;
+		overflow-wrap: anywhere;
+	}
+
+	thead th {
+		padding-block: 0.4rem;
+		border-bottom: 2px solid var(--pico-muted-border-color);
+		color: var(--pico-muted-color);
+		font-size: 0.8rem;
+		font-weight: 600;
+	}
+
+	thead th:first-child,
+	tbody th[scope="row"] {
+		width: 38%;
+		text-align: left;
+	}
+
+	thead th:not(:first-child),
+	td {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* A section header: subtle band with an accent edge. */
+	tr.group th {
+		padding-block: 0.35rem;
+		border-bottom: 0;
+		border-left: 3px solid var(--pico-primary-background);
+		background: var(--pico-card-sectioning-background-color);
+		color: var(--pico-muted-color);
+		font-size: 0.75rem;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+	}
+
+	tbody:not(:first-of-type) tr.group th {
+		border-top: 1px solid var(--pico-muted-border-color);
+	}
+
+	/* Zebra rows, so a metric's three cells read as one line. */
+	tr[data-compare-row]:nth-child(even) > * {
+		background: var(--pico-card-sectioning-background-color);
+	}
+
+	tr[data-compare-row]:hover > * {
+		background: var(--pico-dropdown-hover-background-color);
+	}
+
+	tbody th[scope="row"] {
+		font-weight: 400;
+	}
+
+	/* The metric name as a label chip. */
+	.metric {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		max-width: 100%;
+		padding: 0.05rem 0.5rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: 999px;
+		background: var(--pico-background-color);
+		color: var(--pico-color);
+		font-size: 0.85rem;
+	}
+
+	/* Bigger or smaller, neutrally: the larger figure is bold, the smaller one
+	   plain and muted. Weight carries it, so colour is never the only cue. */
+	td.larger {
+		color: var(--pico-color);
+		font-weight: 700;
+	}
+
+	td.smaller {
+		color: var(--pico-muted-color);
+		font-weight: 400;
+	}
+
+	.icon {
+		display: inline-block;
+		width: 1.25rem;
+		height: 1.25rem;
+		flex: none;
+		overflow: hidden;
+		font-size: 0;
+	}
+
+	.icon :global(.icon) {
+		display: block;
+		width: 1.25rem;
+		height: 1.25rem;
+		font-size: 1.25rem;
+	}
+
+	tr.omitted td {
+		color: var(--pico-muted-color);
+		font-size: 0.8rem;
+		text-align: left;
+	}
+
+	td::before {
+		display: none;
+	}
+
+	/* Phones: each metric stacks, the chip on its own line over the A and B figures. */
+	@media (max-width: 40rem) {
+		table,
+		tbody {
+			display: block;
+		}
+
+		thead {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+		}
+
+		tr {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		tr.group th,
+		tr.omitted td {
+			grid-column: 1 / -1;
+		}
+
+		tbody th[scope="row"] {
+			grid-column: 1 / -1;
+			width: auto;
+			padding-bottom: 0;
+			border-bottom: 0;
+		}
+
+		td {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 0.5rem;
+		}
+
+		td::before {
+			display: inline;
+			content: attr(data-side);
+			color: var(--pico-muted-color);
+			font-size: 0.75rem;
+			font-weight: 400;
+		}
+
+		tr[data-compare-row] {
+			border-bottom: 1px solid var(--pico-muted-border-color);
+		}
+
+		tr[data-compare-row] > * {
+			border-bottom: 0;
+		}
+	}
+</style>

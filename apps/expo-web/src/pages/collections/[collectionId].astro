@@ -1,0 +1,79 @@
+---
+// Shareable public collection. Private collections answer 404 to everyone
+// here (the owner manages them under /account/collections).
+import ArrowLeft from "@lucide/astro/icons/arrow-left";
+import EntryGrid from "@components/entry/EntryGrid.astro";
+import Page from "@layouts/Page.astro";
+import { ApiError } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server.ts";
+import { toCard } from "@utils/entry-card.ts";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { renderMarkdown } from "@utils/markdown";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { metaDescription } from "@utils/meta.ts";
+
+const { collectionId } = Astro.params;
+let collection;
+try {
+	collection = await getServerApiClient(Astro).collections.get(collectionId!);
+} catch (err) {
+	if (err instanceof ApiError && err.status === 404) return Astro.rewrite("/404");
+	throw err;
+}
+if (collection.visibility !== "public") return Astro.rewrite("/404");
+const entries = collection.entries ?? [];
+const description = metaDescription(
+	collection.description,
+	`A Factorio blueprint collection${collection.owner_username ? ` by ${collection.owner_username}` : ""} with ${entries.length} ${entries.length === 1 ? "entry" : "entries"}.`,
+);
+---
+
+<Page title={stripRichText(collection.name)} description={description}>
+	{collection.owner_username && (
+		<nav class="back">
+			<a href={`/u/${encodeURIComponent(collection.owner_username)}/collections`}>
+				<ArrowLeft aria-hidden="true" /> Back to {collection.owner_username}'s profile
+			</a>
+		</nav>
+	)}
+	<header>
+		<h1 set:html={formatRichText(collection.name)} />
+		{collection.owner_username && (
+			<p class="muted">
+				A collection by{" "}
+				<a href={`/u/${encodeURIComponent(collection.owner_username)}`}>
+					{collection.owner_username}
+				</a>
+			</p>
+		)}
+		{collection.description && (
+			<div class="description" set:html={renderMarkdown(collection.description)} />
+		)}
+	</header>
+	{entries.length === 0 ? (
+		<p>This collection is empty.</p>
+	) : (
+		<EntryGrid cards={entries.map((entry) => toCard(entry))} />
+	)}
+</Page>
+
+<style>
+	.back {
+		margin-bottom: 1rem;
+	}
+	.back a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+	.back :global(svg) {
+		width: 1rem;
+		height: 1rem;
+	}
+	.description {
+		overflow-wrap: anywhere;
+	}
+	.muted {
+		color: var(--pico-muted-color);
+	}
+</style>

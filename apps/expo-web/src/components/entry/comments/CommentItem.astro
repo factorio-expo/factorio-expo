@@ -1,0 +1,163 @@
+---
+// One comment: number anchor, author, time, revision badge, body (or a
+// "removed" tombstone) and the viewer's actions. Edit and remove come from
+// the server's can_edit / can_remove; report is offered to signed-in viewers
+// on comments that are not theirs. Behaviour in comments.ts.
+import Flag from "@lucide/astro/icons/flag";
+import Pencil from "@lucide/astro/icons/pencil";
+import Trash from "@lucide/astro/icons/trash";
+import type { Comment } from "@lib/api";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { renderCommentMarkdown } from "@utils/markdown";
+
+interface Props {
+	comment: Comment;
+	signedIn: boolean;
+	/** Link for a `#N` reference, or null when the thread has no comment N. */
+	refHref: (number: number) => string | null;
+}
+const { comment, signedIn, refHref } = Astro.props;
+const removed = comment.removed_by !== undefined;
+const removedText = {
+	author: "Removed by its author.",
+	owner: "Removed by the entry owner.",
+	admin: "Removed by staff.",
+	account: "Removed: its author deleted their account.",
+}[comment.removed_by ?? "author"];
+const reportable = signedIn && !removed && !comment.can_edit;
+---
+
+<li class="comment" id={`c-${comment.number}`} data-comment={comment.number}>
+	<header>
+		<a class="comment-number" href={`#c-${comment.number}`}>
+			#{comment.number}
+		</a>
+		<a href={`/u/${encodeURIComponent(comment.author)}`}>{comment.author}</a>
+		<time datetime={comment.created_at} data-local="datetime" title={comment.created_at}>
+			{isoDateTime(comment.created_at)}
+		</time>
+		<span class="comment-badge" data-tooltip="Live revision when posted">
+			rev {comment.revision_number}
+		</span>
+		{comment.edited_at && !removed && (
+			<span class="comment-badge" data-tooltip={`Edited ${comment.edited_at}`}>
+				edited
+			</span>
+		)}
+		<span class="comment-actions">
+			{comment.can_edit && (
+				<button
+					type="button"
+					class="icon-button"
+					data-comment-edit
+					aria-label={`Edit comment #${comment.number}`}
+					data-tooltip="Edit"
+				>
+					<Pencil aria-hidden="true" />
+				</button>
+			)}
+			{comment.can_remove && (
+				<button
+					type="button"
+					class="icon-button"
+					data-comment-remove
+					aria-label={`Remove comment #${comment.number}`}
+					data-tooltip="Remove"
+				>
+					<Trash aria-hidden="true" />
+				</button>
+			)}
+			{reportable && (
+				<button
+					type="button"
+					class="icon-button"
+					data-comment-report
+					aria-label={`Report comment #${comment.number}`}
+					data-tooltip="Report"
+				>
+					<Flag aria-hidden="true" />
+				</button>
+			)}
+		</span>
+	</header>
+	{removed ? (
+		<p class="comment-removed">{removedText}</p>
+	) : (
+		<div
+			class="comment-body"
+			data-comment-body
+			set:html={renderCommentMarkdown(comment.body, refHref)}
+		/>
+	)}
+	{comment.can_edit && (
+		<form data-comment-edit-form hidden>
+			<textarea
+				name="body"
+				rows="5"
+				maxlength="4000"
+				required
+				aria-label={`Text of comment #${comment.number}`}
+			>{comment.body}</textarea>
+			<div class="comment-form-actions">
+				<button type="submit">Save</button>
+				<button type="button" class="secondary" data-comment-edit-cancel>
+					Cancel
+				</button>
+			</div>
+		</form>
+	)}
+	<p class="comment-status" data-comment-status role="status" aria-live="polite"></p>
+</li>
+
+<style>
+	.comment {
+		padding: 0.75rem 0;
+		border-bottom: 1px solid var(--pico-muted-border-color);
+		list-style: none;
+		scroll-margin-top: 5rem;
+	}
+	.comment:target {
+		background: var(--pico-mark-background-color);
+	}
+	header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.25rem 0.75rem;
+		font-size: 0.9em;
+	}
+	.comment-number {
+		font-weight: 600;
+	}
+	time,
+	.comment-badge {
+		color: var(--pico-muted-color);
+	}
+	.comment-badge {
+		font-size: 0.85em;
+	}
+	.comment-actions {
+		display: inline-flex;
+		gap: 0.25rem;
+		margin-left: auto;
+	}
+	.comment-body {
+		margin-top: 0.5rem;
+		overflow-wrap: anywhere;
+	}
+	.comment-body :global(p:last-child) {
+		margin-bottom: 0;
+	}
+	.comment-removed {
+		margin: 0.5rem 0 0;
+		color: var(--pico-muted-color);
+		font-style: italic;
+	}
+	.comment-form-actions {
+		display: flex;
+		gap: 0.5rem;
+	}
+	.comment-status:empty {
+		display: none;
+	}
+</style>

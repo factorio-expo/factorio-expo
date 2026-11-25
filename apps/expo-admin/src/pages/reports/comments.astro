@@ -1,0 +1,177 @@
+---
+// Comment reports, grouped per comment: its body as reported next to how it
+// is now. Remove it as staff, resolve, or ban its author.
+import Outcome from "@components/Outcome.astro";
+import Console from "@layouts/Console.astro";
+import { FormError, handlePost } from "@lib/api/actions";
+import { loadFromApi } from "@lib/api/page";
+import type { CommentReport, ReportedComment } from "@lib/api/types";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { formText } from "@lib/forms";
+import { siteEntryUrl } from "@lib/site";
+
+const posted = await handlePost(Astro, async (api, form) => {
+	const commentId = formText(form, "comment_id");
+	const reason = formText(form, "reason");
+	switch (formText(form, "action")) {
+		case "resolve":
+			await api.resolveCommentReports(commentId, reason);
+			return "Reports resolved; the comment stays.";
+		case "remove":
+			await api.removeComment(commentId, reason);
+			return "Comment removed (shown as removed by staff) and its reports resolved.";
+		default:
+			throw new FormError("Unknown action.");
+	}
+});
+if (posted) return posted;
+
+const loaded = await loadFromApi(Astro, (api) => api.commentReports());
+const groups = loaded.data;
+
+const reasonText: Record<CommentReport["reason"], string> = {
+	spam: "Spam",
+	abuse: "Abuse",
+	off_topic: "Off topic",
+	other: "Other",
+};
+const removedLabel: Record<NonNullable<ReportedComment["removed_by"]>, string> = {
+	author: "removed by its author",
+	owner: "removed by the entry owner",
+	admin: "removed by staff",
+	account: "removed: its author deleted their account",
+};
+---
+
+<Console
+	title="Comment reports"
+	nav="comment-reports"
+	description="Open reports, grouped per comment, the oldest first."
+>
+	<Outcome loadError={loaded.error} />
+	{groups && groups.length === 0 && <p class="empty">No open comment reports.</p>}
+	<div class="stack">
+		{groups?.map(({ comment, reports }) => {
+			const link = siteEntryUrl(comment.entry_id, comment.number);
+			return (
+				<article class="panel" aria-labelledby={`comment-${comment.id}`}>
+					<div class="panel-head">
+						<h2 id={`comment-${comment.id}`}>
+							#{comment.number} on{" "}
+							{link ? (
+								<a href={link} target="_blank" rel="noopener noreferrer">
+									{comment.entry_title || "(untitled)"}
+								</a>
+							) : (
+								comment.entry_title || "(untitled)"
+							)}
+						</h2>
+						<span class="pill" data-tone="warn">
+							{reports.length} report{reports.length === 1 ? "" : "s"}
+						</span>
+					</div>
+					<p class="meta">
+						<span>
+							by {comment.author}{" "}
+							<a href={`/bans?username=${encodeURIComponent(comment.author)}`}>
+								(ban)
+							</a>
+						</span>
+						<span class="muted">{isoDateTime(comment.created_at)}</span>
+						{comment.removed_by && (
+							<span class="pill" data-tone="danger">
+								{removedLabel[comment.removed_by]}
+							</span>
+						)}
+					</p>
+					{comment.body ? (
+						<blockquote class="body">{comment.body}</blockquote>
+					) : (
+						<p class="muted">The comment has no text any more.</p>
+					)}
+
+					<ul class="reports">
+						{reports.map((report) => (
+							<li>
+								<p>
+									<strong>{reasonText[report.reason]}</strong>
+									<span class="muted">
+										{" "}
+										· {report.reporter.username ?? "a member"} ·{" "}
+										{isoDateTime(report.created_at)}
+									</span>
+								</p>
+								{report.note && <p class="note">{report.note}</p>}
+								{report.body_snapshot !== comment.body && (
+									<details class="more">
+										<summary>Changed since: as reported</summary>
+										<blockquote class="body">{report.body_snapshot}</blockquote>
+									</details>
+								)}
+							</li>
+						))}
+					</ul>
+
+					<form method="post" class="panel-foot actions">
+						<input type="hidden" name="comment_id" value={comment.id} />
+						<input
+							type="text"
+							name="reason"
+							placeholder="Note (optional)"
+							aria-label="Note"
+							maxlength="500"
+						/>
+						<button type="submit" name="action" value="resolve">
+							Resolve, keep comment
+						</button>
+						{!comment.removed_by && (
+							<button
+								type="submit"
+								name="action"
+								value="remove"
+								class="danger"
+								data-confirm="Remove this comment? It shows as removed by staff."
+							>
+								Remove comment
+							</button>
+						)}
+					</form>
+				</article>
+			);
+		})}
+	</div>
+</Console>
+
+<style>
+	.meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem 0.8rem;
+		align-items: center;
+		margin: -0.25rem 0 0.5rem;
+		font-size: 0.9rem;
+	}
+	.body {
+		margin: 0.4rem 0 0.6rem;
+		white-space: pre-wrap;
+	}
+	.reports {
+		margin: 0;
+		padding: 0;
+	}
+	.reports li {
+		list-style: none;
+		padding-block: 0.6rem;
+		border-top: var(--console-border);
+	}
+	.reports li p {
+		margin: 0;
+	}
+	.note {
+		margin-top: 0.3rem !important;
+		white-space: pre-wrap;
+	}
+	.panel-foot {
+		margin-bottom: 0;
+	}
+</style>

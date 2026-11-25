@@ -1,0 +1,31 @@
+---
+// The Turnstile widget of a form signed-out visitors submit (lib/turnstile.ts):
+// rendered only while PUBLIC_TURNSTILE_SITE_KEY is set and the viewer is
+// signed out, since the API checks only anonymous requests. The page must
+// allow Cloudflare in its CSP (allowGuestTurnstile). The form's script reads
+// it with mountHumanCheck.
+import { PUBLIC_TURNSTILE_SITE_KEY } from "astro:env/client";
+import type { TurnstileAction } from "@lib/turnstile";
+import { getViewer } from "@lib/viewer";
+
+interface Props {
+	action: TurnstileAction;
+}
+const { action } = Astro.props;
+const guest = (await getViewer(Astro)).state !== "in";
+---
+
+{PUBLIC_TURNSTILE_SITE_KEY && guest && (
+	<div
+		class="human-check"
+		data-turnstile
+		data-sitekey={PUBLIC_TURNSTILE_SITE_KEY}
+		data-action={action}
+	/>
+)}
+
+<style>
+	.human-check {
+		margin-bottom: var(--pico-spacing);
+	}
+</style>

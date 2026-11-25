@@ -1,0 +1,38 @@
+---
+import { gameIcon } from "./game-icons.ts";
+
+interface Props {
+	prototypeType: string;
+	name: string;
+	quality?: string;
+	label?: string;
+	decorative?: boolean;
+}
+
+const {
+	prototypeType,
+	name,
+	quality = "normal",
+	label = `${prototypeType}=${name}`,
+	decorative = false,
+} = Astro.props;
+const style = gameIcon(prototypeType, name, quality);
+---
+
+{style ? (
+	<span
+		class="icon factorio-icon"
+		style={style}
+		role={decorative ? undefined : "img"}
+		aria-label={
+			decorative ? undefined : `${label}${quality !== "normal" ? `, quality=${quality}` : ""}`
+		}
+		aria-hidden={decorative ? "true" : undefined}
+	/>
+) : (
+	<span
+		class="icon factorio-icon factorio-icon--missing"
+		style={gameIcon("virtual-signal", "signal-unknown")}
+		aria-hidden="true"
+	/>
+)}

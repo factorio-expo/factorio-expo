@@ -1,0 +1,5 @@
+/* [color=...] rich text (rich-text.ts). Each app darkens it in its light theme:
+   the game picks its colors for a dark UI. */
+.rich-text-color {
+	color: var(--rich-text-color);
+}

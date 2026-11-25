@@ -1,0 +1,118 @@
+---
+// A profile's level and XP (a bar towards the next level), its badges (what
+// earns them is on the about page) and the leaderboard records it holds.
+// Points never rank anyone: there is no user board.
+import Award from "@lucide/astro/icons/award";
+import type { UserProgress } from "@lib/api";
+import {
+	BADGES,
+	boardHref,
+	formatRecordValue,
+	heldFor,
+	levelPercent,
+	xpToNextLevel,
+} from "@lib/achievements";
+import { entryPath } from "@lib/entry-links";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+
+interface Props {
+	progress: UserProgress;
+}
+const { progress } = Astro.props;
+const toNext = xpToNextLevel(progress);
+const xp = progress.xp.toLocaleString("en-US");
+// Short enough for the formatter to keep the link and its comma on one line
+// (a line break between them would render as a space).
+const entryName = (title: string) => stripRichText(title) || "Untitled blueprint";
+---
+
+<div class="progress-row" data-profile-progress>
+	<p class="level">
+		<strong data-profile-level>Level {progress.level}</strong>
+		<span data-profile-xp>{xp} XP</span>
+		<progress
+			value={levelPercent(progress)}
+			max="100"
+			aria-label={`Level ${progress.level}: ${xp} XP`}
+		></progress>
+		<small>
+			{toNext === undefined
+				? "Top level"
+				: `${toNext.toLocaleString("en-US")} XP to level ${progress.level + 1}`}
+		</small>
+		<small>
+			<a href="/about#xp-and-badges">How XP and badges work</a>
+		</small>
+	</p>
+	{progress.badges.length > 0 && (
+		<ul class="badges" aria-label="Badges">
+			{progress.badges.map((badge) => (
+				<li data-badge={badge}>
+					<Award aria-hidden="true" />
+					{BADGES[badge]}
+				</li>
+			))}
+		</ul>
+	)}
+	{progress.records.length > 0 && (
+		<ul class="records" aria-label="Records held">
+			{progress.records.map((record) => (
+				<li>
+					<a href={boardHref(record.group, record.board)}>{record.title}</a>:{" "}
+					<a href={entryPath(record.entry_id)}>{entryName(record.entry_title)}</a>,{" "}
+					{formatRecordValue(record.value, record.unit)}, held {heldFor(record.since)}
+				</li>
+			))}
+		</ul>
+	)}
+</div>
+
+<style>
+	.progress-row {
+		margin-bottom: 0.75rem;
+	}
+	.level {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.25rem 0.75rem;
+		margin-bottom: 0.5rem;
+	}
+	.level progress {
+		flex: 1 1 8rem;
+		max-width: 16rem;
+		margin: 0;
+	}
+	.level small {
+		color: var(--pico-muted-color);
+	}
+	.badges {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin: 0 0 0.5rem;
+		padding: 0;
+		list-style: none;
+	}
+	.badges li {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin: 0;
+		padding: 0.15rem 0.6rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: 999px;
+		font-size: 0.85rem;
+	}
+	.badges :global(svg) {
+		width: 0.95rem;
+		height: 0.95rem;
+		color: var(--pico-primary);
+	}
+	.records {
+		margin: 0;
+		padding-left: 1.2rem;
+		font-size: 0.95rem;
+		overflow-wrap: anywhere;
+	}
+</style>

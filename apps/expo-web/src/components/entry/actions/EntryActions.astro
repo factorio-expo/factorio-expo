@@ -1,0 +1,27 @@
+---
+// Authenticated-only entry actions (favorite, add to collection). Both stay
+// hidden for anonymous viewers (data-auth-only).
+import CollectionPicker from "./CollectionPicker.astro";
+import FavoriteButton from "./FavoriteButton.astro";
+
+interface Props {
+	entryId: string;
+	/** Whether the viewer favorited the entry. */
+	favorited: boolean;
+}
+const { entryId, favorited } = Astro.props;
+---
+
+<span class="entry-actions">
+	<FavoriteButton entryId={entryId} favorited={favorited} />
+	<CollectionPicker entryId={entryId} />
+</span>
+
+<style>
+	.entry-actions {
+		display: inline-flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+	}
+</style>

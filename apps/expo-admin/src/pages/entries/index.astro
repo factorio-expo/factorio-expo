@@ -1,0 +1,267 @@
+---
+// Entries: every entry whatever its state (deleted, expired, private, quick
+// previews), newest first, with filters. Each opens the entry's page for
+// delete, restore, re-runs, reindex and cache purge.
+import RichText from "@factorio-expo/ui/game/RichText.astro";
+import Console from "@layouts/Console.astro";
+import EntryStatePills from "@components/EntryStatePills.astro";
+import { loadFromApi } from "@lib/api/page";
+import type { EntryState, StaffEntryQuery } from "@lib/api/types";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+
+const states: { key: EntryState; label: string }[] = [
+	{ key: "all", label: "All" },
+	{ key: "live", label: "Live" },
+	{ key: "deleted", label: "Deleted" },
+	{ key: "quick_preview", label: "Quick previews" },
+];
+const params = Astro.url.searchParams;
+const pick = <T extends string>(name: string, allowed: readonly T[]): T | undefined => {
+	const value = params.get(name) ?? "";
+	return (allowed as readonly string[]).includes(value) ? (value as T) : undefined;
+};
+const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+const dateParam = (name: string) => {
+	const value = params.get(name) ?? "";
+	return datePattern.test(value) ? value : undefined;
+};
+const minLeaves = params.get("min_leaves") ?? "";
+
+/** The filters (without state and cursor), as the page shows and links them. */
+const filters: StaffEntryQuery = {
+	q: params.get("q")?.trim() || undefined,
+	visibility: pick("visibility", ["public", "unlisted", "private"] as const),
+	author: pick("author", ["anonymous", "account"] as const),
+	mods: pick("mods", ["vanilla", "space_age", "modded"] as const),
+	failed: params.get("failed") === "1" ? "1" : undefined,
+	from: dateParam("from"),
+	to: dateParam("to"),
+	min_leaves: /^\d{1,6}$/.test(minLeaves) && minLeaves !== "0" ? minLeaves : undefined,
+};
+const state =
+	pick(
+		"state",
+		states.map((s) => s.key),
+	) ?? "all";
+const cursor = params.get("cursor") ?? undefined;
+const filtered = Object.values(filters).some(Boolean);
+
+const loaded = await loadFromApi(Astro, (api) =>
+	api.entries({ ...filters, state: state === "all" ? undefined : state, cursor }),
+);
+const page = loaded.data;
+const number = new Intl.NumberFormat("en");
+
+const listHref = (next: { state?: EntryState; cursor?: string }) => {
+	const search = new URLSearchParams();
+	for (const [name, value] of Object.entries(filters)) if (value) search.set(name, value);
+	const nextState = next.state ?? state;
+	if (nextState !== "all") search.set("state", nextState);
+	if (next.cursor) search.set("cursor", next.cursor);
+	const text = search.toString();
+	return text ? `/entries?${text}` : "/entries";
+};
+const date = (iso: string) => isoDateTime(iso).replace(/ UTC$/, "");
+---
+
+<Console
+	title="Entries"
+	nav="entries"
+	description="Every entry, deleted, expired, private and quick previews included, newest first."
+>
+	{loaded.error && (
+		<p class="error" role="alert">
+			{loaded.error}
+		</p>
+	)}
+
+	<nav class="tabs" aria-label="Filter entries by state">
+		{states.map((s) => (
+			<a
+				href={listHref({ state: s.key })}
+				aria-current={s.key === state ? "page" : undefined}
+			>
+				{s.label}
+				{page && <span class="count">{number.format(page.counts[s.key])}</span>}
+			</a>
+		))}
+	</nav>
+
+	<form method="get" class="toolbar filters" role="search">
+		{state !== "all" && <input type="hidden" name="state" value={state} />}
+		<input
+			type="search"
+			name="q"
+			value={filters.q ?? ""}
+			placeholder="Title, id or owner"
+			aria-label="Search by title, id or owner username"
+		/>
+		<select name="visibility" aria-label="Visibility">
+			<option value="">Any visibility</option>
+			<option value="public" selected={filters.visibility === "public"}>
+				Public
+			</option>
+			<option value="unlisted" selected={filters.visibility === "unlisted"}>
+				Unlisted
+			</option>
+			<option value="private" selected={filters.visibility === "private"}>
+				Private
+			</option>
+		</select>
+		<select name="author" aria-label="Owner">
+			<option value="">Any owner</option>
+			<option value="anonymous" selected={filters.author === "anonymous"}>
+				Anonymous
+			</option>
+			<option value="account" selected={filters.author === "account"}>
+				An account
+			</option>
+		</select>
+		<select name="mods" aria-label="Mods">
+			<option value="">Any mods</option>
+			<option value="vanilla" selected={filters.mods === "vanilla"}>
+				Vanilla
+			</option>
+			<option value="space_age" selected={filters.mods === "space_age"}>
+				Space Age only
+			</option>
+			<option value="modded" selected={filters.mods === "modded"}>
+				Other mods
+			</option>
+		</select>
+		<label class="inline">
+			From <input type="date" name="from" value={filters.from ?? ""} />
+		</label>
+		<label class="inline">
+			To <input type="date" name="to" value={filters.to ?? ""} />
+		</label>
+		<label class="inline">
+			Blueprints ≥
+			<input
+				type="number"
+				name="min_leaves"
+				min="0"
+				max="999999"
+				value={filters.min_leaves ?? ""}
+				class="narrow"
+			/>
+		</label>
+		<label class="inline">
+			<input type="checkbox" name="failed" value="1" checked={filters.failed === "1"} />
+			Failed jobs
+		</label>
+		<button type="submit" class="secondary">
+			Filter
+		</button>
+		{filtered && <a href={state === "all" ? "/entries" : `/entries?state=${state}`}>Clear</a>}
+	</form>
+
+	{page && page.entries.length === 0 && (
+		<p class="empty">
+			No entries{filtered ? " match these filters" : ""}
+			{cursor ? " on this page" : ""}.
+		</p>
+	)}
+	{page && page.entries.length > 0 && (
+		<div class="table-wrap">
+			<table class="data">
+				<thead>
+					<tr>
+						<th scope="col">Entry</th>
+						<th scope="col">Owner</th>
+						<th scope="col">State</th>
+						<th scope="col" class="num">
+							Blueprints
+						</th>
+						<th scope="col" class="num">
+							Reports
+						</th>
+						<th scope="col">Created</th>
+					</tr>
+				</thead>
+				<tbody>
+					{page.entries.map((entry) => (
+						<tr data-gone={entry.gone ? "" : undefined}>
+							<td>
+								<a href={`/entries/${encodeURIComponent(entry.id)}`}>
+									<strong>
+										<RichText text={entry.title} fallback="(untitled)" />
+									</strong>
+								</a>
+								<div class="muted small">
+									<code>{entry.id}</code>
+								</div>
+							</td>
+							<td>
+								{entry.owner ? (
+									<a href={`/users?q=${encodeURIComponent(entry.owner)}`}>
+										{entry.owner}
+									</a>
+								) : (
+									<span class="muted">anonymous</span>
+								)}
+							</td>
+							<td>
+								<EntryStatePills entry={entry} />
+							</td>
+							<td class="num">
+								{number.format(entry.leaves)}
+								{entry.failed_leaves > 0 && (
+									<span class="pill" data-tone="danger">
+										{entry.failed_leaves} failed
+									</span>
+								)}
+							</td>
+							<td class="num">
+								{entry.open_reports > 0 ? (
+									<span class="pill" data-tone="warn">
+										{entry.open_reports} open
+									</span>
+								) : (
+									""
+								)}
+							</td>
+							<td class="nowrap">{date(entry.created_at)}</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+	)}
+	<nav class="pager" aria-label="Pages">
+		{cursor && <a href={listHref({})}>Newest</a>}
+		{page?.next_cursor && <a href={listHref({ cursor: page.next_cursor })}>Older</a>}
+	</nav>
+</Console>
+
+<style>
+	.filters {
+		flex-wrap: wrap;
+	}
+	.filters select,
+	.filters input[type="date"] {
+		width: auto;
+	}
+	.inline {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin: 0;
+		white-space: nowrap;
+	}
+	.narrow {
+		width: 5.5rem !important;
+	}
+	.small {
+		font-size: 0.85rem;
+	}
+	.nowrap {
+		white-space: nowrap;
+	}
+	td.num .pill {
+		margin-left: 0.35rem;
+	}
+	tr[data-gone] td {
+		color: var(--pico-muted-color);
+	}
+</style>

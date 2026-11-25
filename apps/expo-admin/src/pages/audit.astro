@@ -1,0 +1,102 @@
+---
+// Every staff write, newest first.
+import Console from "@layouts/Console.astro";
+import { loadFromApi } from "@lib/api/page";
+import type { AdminAction } from "@lib/api/types";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+
+const cursor = Astro.url.searchParams.get("cursor") ?? undefined;
+const loaded = await loadFromApi(Astro, (api) => api.audit(cursor));
+const page = loaded.data;
+
+const changes = (action: AdminAction) =>
+	action.before !== null || action.after !== null
+		? JSON.stringify({ before: action.before, after: action.after }, null, 2)
+		: undefined;
+/** Targets with a console page of their own. */
+const targetHref = (action: AdminAction) =>
+	action.target_type === "user" ? `/users/${encodeURIComponent(action.target_id)}` : undefined;
+---
+
+<Console title="Audit log" nav="audit" description="Every staff write, newest first.">
+	{loaded.error && (
+		<p class="error" role="alert">
+			{loaded.error}
+		</p>
+	)}
+	{page && page.actions.length === 0 && (
+		<p class="empty">No staff actions recorded{cursor ? " before this point" : " yet"}.</p>
+	)}
+	{page && page.actions.length > 0 && (
+		<div class="table-wrap">
+			<table class="data">
+				<thead>
+					<tr>
+						<th scope="col">When</th>
+						<th scope="col">Staff</th>
+						<th scope="col">Action</th>
+						<th scope="col">Target</th>
+						<th scope="col">Reason and changes</th>
+					</tr>
+				</thead>
+				<tbody>
+					{page.actions.map((action) => {
+						const detail = changes(action);
+						const href = targetHref(action);
+						return (
+							<tr>
+								<td class="when">
+									<time datetime={action.created_at}>
+										{isoDateTime(action.created_at)}
+									</time>
+								</td>
+								<td>{action.staff_username}</td>
+								<td>
+									<code>{action.action}</code>
+								</td>
+								<td>
+									<span class="muted">{action.target_type}</span>{" "}
+									{href ? (
+										<a href={href}>
+											<code>{action.target_id}</code>
+										</a>
+									) : (
+										<code>{action.target_id}</code>
+									)}
+								</td>
+								<td>
+									{action.reason || (!detail && <span class="muted">–</span>)}
+									{detail && (
+										<details class="more">
+											<summary>Changes</summary>
+											<pre>{detail}</pre>
+										</details>
+									)}
+								</td>
+							</tr>
+						);
+					})}
+				</tbody>
+			</table>
+		</div>
+	)}
+	<nav class="pager" aria-label="Audit log pages">
+		{cursor && <a href="/audit">Newest</a>}
+		{page?.next_cursor && (
+			<a href={`/audit?cursor=${encodeURIComponent(page.next_cursor)}`}>Older</a>
+		)}
+	</nav>
+</Console>
+
+<style>
+	.when {
+		white-space: nowrap;
+	}
+	pre {
+		margin: 0.3rem 0 0;
+		padding: 0.5rem;
+		font-size: 0.8rem;
+		max-width: 32rem;
+		overflow: auto;
+	}
+</style>

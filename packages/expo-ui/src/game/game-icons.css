@@ -1,0 +1,16 @@
+/* A game icon drawn from the sprite sheets (GameIcon, gameIcon()): the sheet
+   variables come from gameIconVariables() on <html>. */
+.icon.factorio-icon {
+	display: inline-block;
+	flex: none;
+	vertical-align: -0.15em;
+	width: 1em;
+	height: 1em;
+	background-image: var(--factorio-quality-icon-image, none), var(--factorio-icon-image);
+	background-position: var(--factorio-quality-icon-position, 0 0), var(--factorio-icon-position);
+	background-size:
+		calc(var(--factorio-quality-icon-columns, 0) * 1em)
+			calc(var(--factorio-quality-icon-rows, 0) * 1em),
+		calc(var(--factorio-icon-columns) * 1em) calc(var(--factorio-icon-rows) * 1em);
+	background-repeat: no-repeat, no-repeat;
+}

@@ -1,0 +1,39 @@
+---
+// Pin toggle: puts one of the owner's own public entries on top of their
+// profile. Rendered only where the server knows the viewer owns a listed
+// entry (their profile, their entry page); pin-button.ts drives it.
+import Pin from "@lucide/astro/icons/pin";
+
+interface Props {
+	entryId: string;
+	/** The viewer's state, from the API read that rendered the page. */
+	pinned: boolean;
+	/** Where the tooltip opens: left keeps it inside a card, which clips overflow. */
+	placement?: "top" | "left";
+}
+const { entryId, pinned, placement = "left" } = Astro.props;
+const label = pinned ? "Unpin from profile" : "Pin to profile";
+---
+
+<button
+	type="button"
+	class="icon-button pin-toggle"
+	data-pin-toggle
+	data-entry-id={entryId}
+	data-placement={placement}
+	aria-pressed={String(pinned)}
+	aria-label={label}
+	data-tooltip={label}
+>
+	<Pin aria-hidden="true" />
+</button>
+
+<script>
+	import "./pin-button.ts";
+</script>
+
+<style>
+	.pin-toggle[aria-pressed="true"] :global(svg) {
+		fill: currentColor;
+	}
+</style>

@@ -1,0 +1,509 @@
+name: factorio-expo
+
+# Docker keeps container logs forever by default. Every service rotates them
+# (3 files of 10 MB).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Database admin settings shared by expo-db-setup and expo-db-migrate. The
+# superuser (POSTGRES_USER) only runs setup and migrations; expo-api and
+# expo-render-worker connect with their own row-access-only roles.
+x-db-admin: &db-admin
+  build:
+    context: .
+    dockerfile: apps/expo-db/Dockerfile
+  image: factorio-expo-db
+  environment:
+    POSTGRES_HOST: "expo-postgres"
+    POSTGRES_USER: "${POSTGRES_USER:-factorio_expo}"
+    POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"
+    POSTGRES_DB: "${POSTGRES_DB:-factorio_expo}"
+    API_POSTGRES_USER: "${API_POSTGRES_USER:-factorio_expo_api}"
+    API_POSTGRES_PASSWORD: "${API_POSTGRES_PASSWORD:?set API_POSTGRES_PASSWORD}"
+    RUNNER_POSTGRES_USER: "${RUNNER_POSTGRES_USER:-factorio_expo_runner}"
+    RUNNER_POSTGRES_PASSWORD: "${RUNNER_POSTGRES_PASSWORD:?set RUNNER_POSTGRES_PASSWORD}"
+    RUNNER_POSTGRES_DB: "${RUNNER_POSTGRES_DB:-factorio_expo_runner}"
+  depends_on:
+    expo-postgres:
+      condition: service_healthy
+  networks:
+    - expo-network
+
+services:
+  factorio-downloader:
+    logging: *logging
+    build:
+      context: factorio/factorio-downloader
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    container_name: factorio-expo-factorio-downloader
+    environment:
+      FACTORIO_USERNAME: "${FACTORIO_USERNAME:?set FACTORIO_USERNAME}"
+      FACTORIO_TOKEN: "${FACTORIO_TOKEN:?set FACTORIO_TOKEN}"
+      FACTORIO_VERSION: "${FACTORIO_VERSION:-2.1.24}"
+    volumes:
+      - factorio-engine:/app/factorio
+      - factorio-downloads:/app/downloads
+
+  factorio-server:
+    logging: *logging
+    build:
+      context: .
+      dockerfile: factorio/factorio-server/Dockerfile
+    platform: linux/amd64
+    container_name: factorio-expo-factorio-server
+    restart: unless-stopped
+    environment:
+      FACTORIO_RCON_PORT: "${FACTORIO_RCON_PORT:-27015}"
+      FACTORIO_RCON_PASSWORD: "${FACTORIO_RCON_PASSWORD:?set FACTORIO_RCON_PASSWORD}"
+      FACTORIO_GAME_PORT: "${FACTORIO_GAME_PORT:-34197}"
+    volumes:
+      - factorio-engine:/app/factorio
+      - factorio-userdata:/app/data
+      - factorio-preview-inbox:/app/data/script-output/previews
+    networks:
+      - expo-network
+    ports:
+      - "127.0.0.1:${FACTORIO_RCON_PORT:-27015}:${FACTORIO_RCON_PORT:-27015}"
+    depends_on:
+      factorio-downloader:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [ "CMD", "/factorio-healthcheck.sh" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  factorio-client:
+    logging: *logging
+    build:
+      context: .
+      dockerfile: ./factorio/factorio-client/Dockerfile
+    platform: linux/amd64
+    container_name: factorio-expo-factorio-client
+    restart: unless-stopped
+    environment:
+      FACTORIO_SERVER_HOST: "factorio-server"
+      FACTORIO_SERVER_PORT: "${FACTORIO_GAME_PORT:-34197}"
+      GALLIUM_DRIVER: "${GALLIUM_DRIVER:-llvmpipe}"
+      LP_NUM_THREADS: "${FACTORIO_CLIENT_RASTER_THREADS:-2}"
+      FACTORIO_CLIENT_FPS: "${FACTORIO_CLIENT_FPS:-10}"
+    depends_on:
+      factorio-server:
+        condition: service_started
+      factorio-downloader:
+        condition: service_completed_successfully
+    volumes:
+      - factorio-engine:/app/factorio
+      - factorio-client-userdata:/app/data
+      - factorio-preview-inbox:/app/data/script-output/previews
+    networks:
+      - expo-network
+    healthcheck:
+      test: [ "CMD", "/factorio-healthcheck.sh" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  expo-render-worker:
+    logging: *logging
+    build:
+      context: .
+      dockerfile: ./apps/expo-render-worker/Dockerfile
+    container_name: factorio-expo-render-worker
+    restart: unless-stopped
+    environment:
+      RUNNER_HTTP_ADDR: ":8081"
+      FACTORIO_RCON_ADDR: "factorio-server:${FACTORIO_RCON_PORT:-27015}"
+      FACTORIO_RCON_PASSWORD: "${FACTORIO_RCON_PASSWORD:?set FACTORIO_RCON_PASSWORD}"
+      # The runner's own row-access role and database (see expo-db-setup).
+      RUNNER_DATABASE_URL: "postgres://${RUNNER_POSTGRES_USER:-factorio_expo_runner}:${RUNNER_POSTGRES_PASSWORD}@expo-postgres:5432/${RUNNER_POSTGRES_DB:-factorio_expo_runner}?sslmode=disable"
+      RUNNER_INBOX_PATH: "/data/inbox"
+      RUNNER_ARTIFACT_PATH: "/data/artifacts"
+      RUNNER_ARTIFACT_TTL: "${RUNNER_ARTIFACT_TTL:-24h}"
+      RUNNER_CAPTURE_TIMEOUT: "${RUNNER_CAPTURE_TIMEOUT:-5m}"
+    depends_on:
+      # restart: compose stops the worker before it recreates the server, so a
+      # deploy interrupts a running job (retryable) instead of failing it as
+      # factorio_restarted (final). Crash restarts by Docker are not affected.
+      factorio-server:
+        condition: service_started
+        restart: true
+      factorio-client:
+        condition: service_started
+      expo-db-setup:
+        condition: service_completed_successfully
+    expose:
+      - "8081"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/expo-render-worker", "healthcheck"]
+      interval: 1m
+      timeout: 3s
+      retries: 10
+      start_period: 1m
+      start_interval: 5s
+    volumes:
+      - factorio-preview-inbox:/data/inbox
+      - render-worker-data:/data
+    networks:
+      - expo-network
+
+  expo-postgres:
+    logging: *logging
+    # The official image with our server settings (apps/expo-db/postgres/).
+    build:
+      context: apps/expo-db/postgres
+    image: factorio-expo-postgres
+    container_name: factorio-expo-postgres
+    restart: unless-stopped
+    # Parallel queries use /dev/shm; Docker's 64 MB default is too small.
+    shm_size: 256mb
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-factorio_expo}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB:-factorio_expo}"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    networks:
+      - expo-network
+    # Published on loopback only so local tools (psql, IDE) can inspect data
+    # without exposing the database to the LAN. Containers reach it as
+    # "expo-postgres:5432" on the compose network.
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-factorio_expo} -d ${POSTGRES_DB:-factorio_expo}"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 1m
+      start_interval: 5s
+
+  # One-shot on every `up`: roles, databases, pending up migrations for the
+  # catalog and runner databases, grants. The apps wait for it.
+  expo-db-setup:
+    logging: *logging
+    <<: *db-admin
+    container_name: factorio-expo-db-setup
+
+  # Interactive migrations (asks database, then up/down/force):
+  #   docker compose run --rm expo-db-migrate
+  expo-db-migrate:
+    logging: *logging
+    <<: *db-admin
+    profiles: ["tools"]
+    command: ["expo-db-migrate"]
+    stdin_open: true
+    tty: true
+
+  expo-typesense:
+    logging: *logging
+    image: typesense/typesense:30.2
+    container_name: factorio-expo-typesense
+    restart: unless-stopped
+    environment:
+      TYPESENSE_API_KEY: "${TYPESENSE_API_KEY:-local-dev-typesense-key}"
+      TYPESENSE_DATA_DIR: "/data"
+    volumes:
+      - typesense-data:/data
+    networks:
+      - expo-network
+    healthcheck:
+      # The image has no curl/wget; use bash's /dev/tcp to probe the port.
+      test: [ "CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8108" ]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 1m
+      start_interval: 5s
+
+  # Hands the API's storage bind mount (preview images) to the distroless
+  # nonroot user. Only the mount's own directory: everything below it is
+  # written by the API already. Needed on Linux, where docker creates a missing
+  # bind source as root; harmless on Docker Desktop.
+  expo-storage-init:
+    logging: *logging
+    image: debian:trixie-20261020-slim
+    container_name: factorio-expo-storage-init
+    command: ["sh", "-c", "mkdir -p /storage /ledger && chown 65532:65532 /storage /ledger && chmod 0755 /storage && chmod 0750 /ledger"]
+    volumes:
+      - "${EXPO_STORAGE_DIR:-./data/storage}:/storage"
+      - "${EXPO_LEDGER_DIR:-./data/ledger}:/ledger"
+
+  expo-api:
+    logging: *logging
+    build:
+      context: .
+      dockerfile: ./apps/expo-api/Dockerfile
+    container_name: factorio-expo-api
+    restart: unless-stopped
+    environment:
+      API_HTTP_ADDR: ":8080"
+      # Browser origins allowed to call the API (CORS + CSRF origin check).
+      # Production: the public site origin, e.g. https://example.org.
+      API_ALLOWED_ORIGIN: "${API_ALLOWED_ORIGIN:-http://localhost:3000,http://localhost:4321}"
+      # The API's browser-facing base: sign-in providers call back to
+      # {API_PUBLIC_URL}/api/v1/auth/{provider}/callback. Same origin as the site
+      # in production; set API_PUBLIC_URL when PUBLIC_API_BASE_URL is relative.
+      API_PUBLIC_URL: "${API_PUBLIC_URL:-${PUBLIC_API_BASE_URL:-http://localhost:8080}}"
+      # Sign-in providers, each on when its credentials are set.
+      # Passkeys need no setup.
+      API_GITHUB_CLIENT_ID: "${API_GITHUB_CLIENT_ID:-}"
+      API_GITHUB_CLIENT_SECRET: "${API_GITHUB_CLIENT_SECRET:-}"
+      API_DISCORD_CLIENT_ID: "${API_DISCORD_CLIENT_ID:-}"
+      API_DISCORD_CLIENT_SECRET: "${API_DISCORD_CLIENT_SECRET:-}"
+      API_STEAM_API_KEY: "${API_STEAM_API_KEY:-}"
+      API_GOOGLE_CLIENT_ID: "${API_GOOGLE_CLIENT_ID:-}"
+      API_GOOGLE_CLIENT_SECRET: "${API_GOOGLE_CLIENT_SECRET:-}"
+      # Cloudflare Turnstile on sign-up and anonymous uploads, quick
+      # previews, revisions and reports, on when set; set the web's
+      # PUBLIC_TURNSTILE_SITE_KEY with it.
+      API_TURNSTILE_SECRET_KEY: "${API_TURNSTILE_SECRET_KEY:-}"
+      # Purges the CDN's cached previews when an entry goes private or away; both
+      # needed, otherwise it does nothing.
+      API_CLOUDFLARE_API_TOKEN: "${API_CLOUDFLARE_API_TOKEN:-}"
+      API_CLOUDFLARE_ZONE_ID: "${API_CLOUDFLARE_ZONE_ID:-}"
+      # Render queue tuning (docs/architecture.md#render-queue); empty keeps
+      # the defaults.
+      API_RENDER_WINDOW: "${API_RENDER_WINDOW:-}"
+      API_RENDER_CAP_ANONYMOUS: "${API_RENDER_CAP_ANONYMOUS:-}"
+      API_RENDER_CAP_SIGNED_IN: "${API_RENDER_CAP_SIGNED_IN:-}"
+      API_RENDER_DELAY_SIGNED_IN: "${API_RENDER_DELAY_SIGNED_IN:-}"
+      API_RENDER_DELAY_ANONYMOUS: "${API_RENDER_DELAY_ANONYMOUS:-}"
+      API_RENDER_DELAY_RERENDER: "${API_RENDER_DELAY_RERENDER:-}"
+      API_RENDER_DELAY_REPAIR: "${API_RENDER_DELAY_REPAIR:-}"
+      API_RENDER_LEAF_GAP: "${API_RENDER_LEAF_GAP:-}"
+      # Fetches an hour the API makes from each import site (and from gists).
+      API_IMPORT_HOURLY_BUDGET: "${API_IMPORT_HOURLY_BUDGET:-}"
+      API_IMPORT_GIST_HOURLY_BUDGET: "${API_IMPORT_GIST_HOURLY_BUDGET:-}"
+      API_RATE_LIMIT: "${API_RATE_LIMIT:-true}"
+      API_COOKIE_SECURE: "${API_COOKIE_SECURE:-true}"
+      # Quick preview lifetime.
+      API_QUICK_PREVIEW_TTL: "${API_QUICK_PREVIEW_TTL:-24h}"
+      API_CHALLENGE_SCORES_TTL: "${API_CHALLENGE_SCORES_TTL:-10s}"
+      # Preview images (lossy WebP + thumbnail) live on the bind mount below.
+      API_STORAGE_DIR: "/var/lib/expo/storage"
+      # Ids of hard-deleted accounts, kept outside the database so a restore can
+      # delete them again (docs/admin.md#account-deletion).
+      API_DELETED_USERS_FILE: "/var/lib/expo/ledger/deleted-users.log"
+      # Parallel preview encodes (0: half the CPUs).
+      API_PREVIEW_ENCODERS: "${API_PREVIEW_ENCODERS:-0}"
+      # Header carrying the visitor IP, trusted only from private-network peers
+      # (the reverse proxy via the docker gateway, expo-web SSR).
+      API_CLIENT_IP_HEADER: "X-Real-IP"
+      PREVIEW_RUNNER_URL: "http://expo-render-worker:8081"
+      # Row-access-only role on the catalog database (see expo-db-setup).
+      DATABASE_URL: "postgres://${API_POSTGRES_USER:-factorio_expo_api}:${API_POSTGRES_PASSWORD}@expo-postgres:5432/${POSTGRES_DB:-factorio_expo}?sslmode=disable"
+      API_JWT_SECRET: "${API_JWT_SECRET:?set API_JWT_SECRET}"
+      # Retired secret that only verifies, while rotating.
+      API_JWT_SECRET_PREVIOUS: "${API_JWT_SECRET_PREVIOUS:-}"
+      # Keys the hashes IP bans store instead of addresses.
+      API_IP_HASH_SECRET: "${API_IP_HASH_SECRET:?set API_IP_HASH_SECRET}"
+      API_IP_BAN_DURATION: "${API_IP_BAN_DURATION:-6h}"
+      API_TAG_SUGGESTION_MIN_SCORE: "${API_TAG_SUGGESTION_MIN_SCORE:-2}"
+      TYPESENSE_URL: "http://expo-typesense:8108"
+      TYPESENSE_API_KEY: "${TYPESENSE_API_KEY:-local-dev-typesense-key}"
+      # The staff API listens on its own port, reachable on the admin network
+      # only (never published, never routed by the reverse proxy). Only expo-admin knows
+      # the token (docs/admin.md).
+      API_ADMIN_ADDR: ":8081"
+      API_ADMIN_TOKEN: "${ADMIN_API_TOKEN:?set ADMIN_API_TOKEN in .env (openssl rand -hex 32)}"
+    depends_on:
+      expo-render-worker:
+        condition: service_healthy
+      expo-db-setup:
+        condition: service_completed_successfully
+      expo-typesense:
+        condition: service_healthy
+      expo-storage-init:
+        condition: service_completed_successfully
+    volumes:
+      # Durable product files. A relative path resolves against this file's
+      # directory; production sets an absolute host path.
+      - "${EXPO_STORAGE_DIR:-./data/storage}:/var/lib/expo/storage"
+      # The deleted-accounts ledger: back it up with the database dump, never
+      # restore an older copy of it.
+      - "${EXPO_LEDGER_DIR:-./data/ledger}:/var/lib/expo/ledger"
+    ports:
+      # Loopback only: the public reaches the API through the reverse proxy.
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      # Distroless has no curl: the binary probes its own /healthz.
+      test: ["CMD", "/usr/local/bin/expo-api", "healthcheck"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 1m
+      start_interval: 5s
+    networks:
+      - expo-network
+      - expo-admin-network
+
+  expo-web:
+    logging: *logging
+    build:
+      context: .
+      dockerfile: apps/expo-web/Dockerfile
+      args:
+        PUBLIC_GAME_ICONS_BASE_URL: "${PUBLIC_GAME_ICONS_BASE_URL:-/game-icons/}"
+        # The public origin: canonical links, sitemap, feeds.
+        PUBLIC_SITE_URL: "${PUBLIC_SITE_URL:-http://localhost:3000}"
+        # Inlined into the client bundle and the CSP at build time.
+        PUBLIC_API_BASE_URL: "${PUBLIC_API_BASE_URL:-http://localhost:8080}"
+        # Turnstile widget on the sign-up forms; empty turns it off.
+        PUBLIC_TURNSTILE_SITE_KEY: "${PUBLIC_TURNSTILE_SITE_KEY:-}"
+        # Operator name, contact email and providers for the legal pages (JSON).
+        PUBLIC_LEGAL: "${PUBLIC_LEGAL:-}"
+    container_name: factorio-expo-web
+    restart: unless-stopped
+    environment:
+      PUBLIC_API_BASE_URL: "${PUBLIC_API_BASE_URL:-http://localhost:8080}"
+      API_INTERNAL_BASE_URL: "http://expo-api:8080"
+    depends_on:
+      expo-api:
+        condition: service_healthy
+    ports:
+      # Loopback only: the public reaches the site through the reverse proxy.
+      - "127.0.0.1:3000:4321"
+    healthcheck:
+      # Distroless has no curl; robots.txt is served without calling the API.
+      test: ["CMD", "/nodejs/bin/node", "-e", "fetch('http://127.0.0.1:4321/robots.txt').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 1m
+      start_interval: 5s
+    networks:
+      - expo-network
+
+  # The staff console (docs/admin.md), behind an identity-aware proxy: expo-admin
+  # verifies its signed JWT on every request. Start it, with Dozzle and its
+  # Docker socket proxy, with `--profile admin`.
+  expo-admin:
+    logging: *logging
+    profiles: ["admin"]
+    build:
+      context: .
+      dockerfile: apps/expo-admin/Dockerfile
+    container_name: factorio-expo-admin
+    restart: unless-stopped
+    environment:
+      # The console's public origin, from ADMIN_HOST (production), else the
+      # local port below.
+      ADMIN_ORIGIN: "${ADMIN_HOST:+https://}${ADMIN_HOST:-http://localhost:3200}"
+      ADMIN_API_URL: "http://expo-api:8081"
+      ADMIN_API_TOKEN: "${ADMIN_API_TOKEN:?set ADMIN_API_TOKEN in .env (openssl rand -hex 32)}"
+      # Identity-aware proxy: both set, every request needs a valid signed JWT.
+      ADMIN_ACCESS_TEAM_DOMAIN: "${ADMIN_ACCESS_TEAM_DOMAIN:-}"
+      ADMIN_ACCESS_AUD: "${ADMIN_ACCESS_AUD:-}"
+      # Local development only: signs this name in while Access is unset and
+      # the origin is localhost; ignored anywhere else.
+      ADMIN_DEV_USER: "${ADMIN_DEV_USER:-}"
+      ADMIN_LOGS_URL: "${ADMIN_LOGS_HOST:+https://}${ADMIN_LOGS_HOST:-http://localhost:9080}/"
+      # Dozzle inside the admin network, for the Overview's resource usage.
+      ADMIN_DOZZLE_URL: "http://dozzle:8080"
+      # The public site, for links to reported entries and comments.
+      ADMIN_SITE_URL: "${ADMIN_SITE_URL:-http://localhost:3000}"
+    depends_on:
+      expo-api:
+        condition: service_healthy
+    ports:
+      # Loopback only: local development reaches it here, production through the reverse proxy.
+      - "127.0.0.1:3200:4321"
+    networks:
+      - expo-network
+      - expo-admin-network
+
+  # Read-only Docker API for Dozzle: container lists, stats, logs and events;
+  # every write (POST) is refused. Internal network only.
+  docker-socket-proxy:
+    logging: *logging
+    profiles: ["admin"]
+    image: tecnativa/docker-socket-proxy:v0.5.0
+    container_name: factorio-expo-docker-socket-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      INFO: 1
+      EVENTS: 1
+      PING: 1
+      VERSION: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - expo-admin-network
+
+  dozzle:
+    logging: *logging
+    profiles: ["admin"]
+    image: amir20/dozzle:v11.4.0
+    container_name: factorio-expo-dozzle
+    restart: unless-stopped
+    environment:
+      DOCKER_HOST: "tcp://docker-socket-proxy:2375"
+      DOZZLE_NO_ANALYTICS: "true"
+      # No login of its own: in production only the identity-aware proxy
+      # stands in front of it.
+      DOZZLE_AUTH_PROVIDER: "none"
+    depends_on:
+      - docker-socket-proxy
+    ports:
+      - "127.0.0.1:9080:8080"
+    networks:
+      - expo-network
+      - expo-admin-network
+
+  expo-game-data:
+    logging: *logging
+    profiles: ["tools"]
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: apps/expo-game-data/Dockerfile
+    environment:
+      FACTORIO_ROOT: "/app/factorio"
+      FACTORIO_BIN: "/app/factorio/bin/x64/factorio"
+      FACTORIO_CONFIG: "/app/config.ini"
+      DATA_DIR: "/data"
+      MODSETS_FILE: "/app/modsets.json"
+      MOD_TABLE_OUTPUT: "/mod-table/modsets.json"
+      ASSET_OUTPUT_DIR: "/output/game-icons"
+      SOURCE_OUTPUT_DIR: "/source"
+      # Only needed to download portal mods; never logged.
+      FACTORIO_USERNAME: "${FACTORIO_USERNAME:-}"
+      FACTORIO_TOKEN: "${FACTORIO_TOKEN:-}"
+    volumes:
+      - factorio-engine:/app/factorio:ro
+      - game-data:/data
+      - ./apps/expo-game-data/modsets.json:/app/modsets.json:ro
+      - ./apps/expo-api/internal/mods:/mod-table
+      - ./packages/expo-ui:/output
+      - ./packages/expo-ui/src/game/data:/source
+    networks:
+      - expo-network
+    depends_on:
+      factorio-downloader:
+        condition: service_completed_successfully
+
+
+volumes:
+  factorio-downloads:
+  factorio-engine:
+  factorio-userdata:
+  factorio-client-userdata:
+  factorio-preview-inbox:
+  render-worker-data:
+  postgres-data:
+  typesense-data:
+  game-data:
+
+networks:
+  expo-network:
+  # expo-api's staff listener and the Docker socket proxy; nothing else.
+  expo-admin-network:

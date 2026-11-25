@@ -1,0 +1,349 @@
+---
+import Page from "@layouts/Page.astro";
+import { LEGAL } from "@lib/legal-env";
+
+const mailto = `mailto:${LEGAL.email}`;
+---
+
+<Page
+	title="Privacy policy"
+	description="What data Factorio Expo holds, why, for how long, who receives it and how to exercise your rights."
+>
+	<h1>Privacy policy</h1>
+	<p>
+		<small>Last updated: 9 November 2026</small>
+	</p>
+	<p>
+		Factorio Expo hosts Factorio blueprints. You can upload without an account, and the site
+		asks for no email address and no password. This page says what is stored anyway.
+	</p>
+
+	<h2>Who is responsible</h2>
+	<p>
+		The controller is {LEGAL.name}. Contact for anything on this page:{" "}
+		<a href={mailto}>{LEGAL.email}</a>.
+	</p>
+
+	<h2>Age</h2>
+	<p>
+		You must be at least 16 years old to upload, comment or create an account (see the{" "}
+		<a href="/terms-of-use">terms of use</a>). Browsing needs no account.
+	</p>
+
+	<h2>What is stored</h2>
+	<h3>Without an account</h3>
+	<ul>
+		<li>
+			<strong>Uploads.</strong> The exchange string you upload, its decoded contents, the
+			title and description you write, tags, the rendered previews and the analysis. An
+			anonymous upload has no owner; whoever holds its edit link can change it, so keep the
+			link private. Public uploads are visible to everyone and may be copied by others.
+		</li>
+		<li>
+			<strong>Reports.</strong> If you report an entry without being signed in, a keyed hash
+			of your IP address (not the address itself) is kept with the report until staff resolve
+			it.
+		</li>
+		<li id="problem-reports">
+			<strong>Problem reports</strong> (the bug button, with or without an account). What you
+			write, the page you were on and what it showed (the entry and blueprint, game version,
+			preview and analysis state, window size and theme), and your browser's name and version
+			(its user agent). Signed in, the report is linked to your account; signed out, a keyed
+			hash of your IP address (not the address itself) is kept with it until staff resolve it.
+			An <strong>email address</strong> only if you give one: it is used for nothing but
+			replying to you about that report, and it is deleted when the report is resolved, or 30
+			days after you sent it if the report is still open.
+		</li>
+		<li>
+			<strong>Render queue.</strong> Each upload, quick preview or re-render waits in a queue
+			for the shared renderer, marked with whose work it is so one person cannot fill it: your
+			account, or when you are not signed in a keyed hash of your IP address (not the address
+			itself). The mark is deleted as soon as the render is done.
+		</li>
+		<li>
+			<strong>Email.</strong> If you write to the contact address (a question, a takedown
+			request, a report of illegal content), your address and message are kept as long as
+			needed to handle it.
+		</li>
+		<li>
+			<strong>Page views.</strong> To count one view per visitor per entry per day, a hash of
+			your address, browser and the entry is kept in memory only. It is dropped when the daily
+			key changes and is never written to the database.
+		</li>
+	</ul>
+
+	<h3>With an account</h3>
+	<ul>
+		<li>
+			<strong>Sign-in methods.</strong> For each linked provider (GitHub, Discord, Google or
+			Steam) the provider's name and your id at that provider, and when you linked and last
+			used it. For each passkey, its public key, a sign count and dates; the private key never
+			leaves your device. A recovery code, shown to you once when you create the account, is
+			stored only as a one-way hash: it cannot be read back, and a recovery replaces it. No
+			email address and no password is stored, and the site does not request your email from
+			any provider.
+		</li>
+		<li>
+			<strong>Username</strong>, which is shown publicly on your uploads and comments, and the
+			date you joined.
+		</li>
+		<li>
+			<strong>Profile, if you fill it in.</strong> A status line, your names on the social
+			sites you choose to link (YouTube, Twitch, GitHub, Reddit, Bluesky, Steam, X) and which
+			of your public entries you pinned. All of it is shown publicly on your profile page.
+			Only the name is stored and the link is built from it; the site does not contact those
+			services or load anything from them, so a visitor's browser reaches them only by
+			following a link.
+		</li>
+		<li>
+			<strong>Sessions.</strong> For each logged-in device: when the session was created, last
+			used and when it expires, and when you last signed in.
+		</li>
+		<li>
+			<strong>Content you create.</strong> Entries and their revisions, comments, favorites,
+			collections and reports you file.
+		</li>
+		<li>
+			<strong>Moderation.</strong> If staff ban an account, the ban and its reason are
+			recorded. To make a ban hold, short-lived IP bans store only keyed hashes of the
+			addresses used by banned accounts, never the addresses. When a banned account is
+			deleted, keyed hashes of its username and sign-in identities may be kept while the ban
+			lasts (a permanent ban: up to 1 year) to refuse sign-ups that evade it.
+		</li>
+	</ul>
+
+	<h3>Technical data for everyone</h3>
+	<ul>
+		<li>
+			<strong>IP addresses</strong> appear in the web server's access log (see retention
+			below) and are held in memory for rate limits, which stop abuse such as mass uploads and
+			sign-up spam. Rate limits are not written to disk.
+		</li>
+		<li>
+			<strong>Bot check.</strong> Cloudflare Turnstile checks that you are a person when you
+			create an account, and when you upload, preview, add a revision, report an entry or send
+			a problem report without being signed in. It runs only on those forms.
+		</li>
+	</ul>
+
+	<h2>Why, and on what legal basis</h2>
+	<ul>
+		<li>
+			<strong>Running your account and hosting your uploads</strong>, including the profile
+			you choose to fill in (Art. 6(1)(b) GDPR, performance of the service you asked for).
+		</li>
+		<li>
+			<strong>Security and abuse prevention</strong>: logs, rate limits, the render queue's
+			per-uploader limit, bans, IP and ban-evasion hashes and the Turnstile check (Art.
+			6(1)(f), legitimate interest in keeping a free public site working and safe). You can
+			object; see your rights below.
+		</li>
+		<li>
+			<strong>Problem reports</strong>, and the email address you may add to one (Art.
+			6(1)(f), legitimate interest in finding and fixing faults in the site, and in replying
+			when you ask for it). Adding an email address is optional; you can ask for it, or the
+			whole report, to be deleted at any time.
+		</li>
+		<li>
+			<strong>Answering your email and handling notices of illegal content</strong> (Art.
+			6(1)(c), the Digital Services Act's duty to handle notices, and Art. 6(1)(f) for
+			everything else you write about).
+		</li>
+	</ul>
+	<p>The site does not use your data for advertising, profiling or analytics.</p>
+
+	<h2>Who receives data</h2>
+	<ul>
+		<li>
+			<strong>Cloudflare, Inc.</strong> delivers the site (CDN and proxy) and runs Turnstile.
+			It sees visitors' IP addresses and requests, and may process them in the United States
+			under the EU-US Data Privacy Framework or standard contractual clauses.
+		</li>
+		<li>
+			<strong>Hosting provider:</strong> {LEGAL.hostingProvider}. It processes data only on
+			the operator's behalf, under a data processing agreement (Art. 28 GDPR).
+		</li>
+		<li>
+			<strong>Email provider</strong> of the contact address: {LEGAL.emailProvider}, under a
+			data processing agreement.
+		</li>
+		<li>
+			<strong>Sign-in providers</strong> (GitHub, Discord, Google, Steam) are independent
+			controllers under their own privacy policies. When you choose one, you go to its
+			website, and it tells this site only your account id and public name. Nothing is sent to
+			them if you use a passkey.
+		</li>
+		<li>Staff of the site see what is needed for moderation and support.</li>
+		<li>
+			<strong>GitHub</strong> hosts the site's public issue tracker. To fix a problem you
+			reported, staff may copy what you wrote and the page details there, never your email
+			address, username or IP hash. Leave personal details out of a problem report.
+		</li>
+	</ul>
+	<p>Data is not sold and not shared with anyone else.</p>
+
+	<h2 id="cookies">Cookies and browser storage</h2>
+	<p>
+		Everything below is strictly necessary to provide the service you asked for, so no consent
+		banner is shown (Art. 5(3) ePrivacy Directive). The site loads no analytics, advertising,
+		embeds or remote fonts.
+	</p>
+	<div class="table-wrap">
+		<table>
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Kind</th>
+					<th>Purpose</th>
+					<th>Lifetime</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td>
+						<code>__Host-expo_session</code>
+					</td>
+					<td>Cookie, HttpOnly</td>
+					<td>Keeps you logged in.</td>
+					<td>7 days</td>
+				</tr>
+				<tr>
+					<td>
+						<code>__Host-expo_oauth</code>
+					</td>
+					<td>Cookie, HttpOnly</td>
+					<td>Protects a sign-in with a provider while you are at the provider.</td>
+					<td>10 minutes</td>
+				</tr>
+				<tr>
+					<td>
+						<code>__Host-expo_signup</code>
+					</td>
+					<td>Cookie, HttpOnly</td>
+					<td>Holds a new provider sign-up until you have chosen a username.</td>
+					<td>10 minutes</td>
+				</tr>
+				<tr>
+					<td>
+						<code>__Host-expo_passkey</code>
+					</td>
+					<td>Cookie, HttpOnly</td>
+					<td>Protects a passkey sign-in, sign-up or confirmation in progress.</td>
+					<td>5 minutes</td>
+				</tr>
+				<tr>
+					<td>
+						<code>theme</code>
+					</td>
+					<td>Local storage</td>
+					<td>Remembers light or dark mode.</td>
+					<td>Until you clear it</td>
+				</tr>
+				<tr>
+					<td>
+						<code>expo:edit-link:*</code>, <code>expo:pending-account-change</code>
+					</td>
+					<td>Session storage</td>
+					<td>
+						Hands a new entry's edit link to its page once, and holds a change while you
+						confirm it is you.
+					</td>
+					<td>Until the tab is closed</td>
+				</tr>
+				<tr>
+					<td>
+						<code>__cf_bm</code>, <code>cf_clearance</code>
+					</td>
+					<td>Cookies set by Cloudflare</td>
+					<td>Bot protection of Cloudflare's network and the Turnstile check.</td>
+					<td>Set by Cloudflare (30 minutes to a year)</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+
+	<h2>How long data is kept</h2>
+	<ul>
+		<li>
+			<strong>Access logs:</strong> 14 days. Container logs are capped in size and removed
+			with the container.
+		</li>
+		<li>
+			<strong>Sessions:</strong> until they expire after 7 days or you log out; removing a
+			sign-in method ends your other sessions.
+		</li>
+		<li>
+			<strong>Deleted accounts:</strong> the account is logged out and its sign-in methods,
+			favorites, collections and profile (status, social links, pins) are removed at once, its
+			comments become empty tombstones and its entries are hidden and removed from search. The
+			rest is erased by a daily clean-up 7 days later. A banned account leaves only keyed
+			hashes behind (see ban hashes below).
+		</li>
+		<li>
+			<strong>Entries:</strong> until deleted by you (or the holder of its edit link), by
+			staff, or until the expiry you chose when uploading. Preview images are cached by
+			Cloudflare and may stay there for a while after deletion.
+		</li>
+		<li>
+			<strong>Backups:</strong> backups of the database, if made, expire after at most 30
+			days; deleted data is gone from them by then and is deleted again if a backup is ever
+			restored.
+		</li>
+		<li>
+			<strong>Problem reports:</strong> deleted 7 days after staff resolve them. An email
+			address is deleted when the report is resolved, or after 30 days if it is still open.
+		</li>
+		<li>
+			<strong>Render queue marks:</strong> until the render is done, usually minutes.
+		</li>
+		<li>
+			<strong>Ban hashes:</strong> IP-ban hashes last hours; hashes kept for a deleted banned
+			account last until its ban ends, a permanent ban up to 1 year.
+		</li>
+	</ul>
+
+	<h2>Your rights</h2>
+	<p>Under the GDPR you have the right to:</p>
+	<ul>
+		<li>
+			<strong>Access and a copy of your data.</strong> Sign in, open your{" "}
+			<a href="/account">account page</a>
+			and choose "Export my data". You get one JSON file with your account and profile,
+			sign-in methods, sessions, entries with their original exchange strings, comments,
+			favorites, pins, collections and reports.
+		</li>
+		<li>
+			<strong>Erasure.</strong> Sign in, open your <a href="/account">account page</a> and
+			choose "Delete account". It takes effect at once; the rest is erased 7 days later (see
+			deleted accounts above). To delete an anonymous entry, use its edit link.
+		</li>
+		<li>
+			<strong>Rectification.</strong> You can change your entries, comments and profile
+			yourself; write to <a href={mailto}>{LEGAL.email}</a> for anything else.
+		</li>
+		<li>
+			<strong>Objection</strong> to processing based on legitimate interest, and restriction
+			in the cases the law provides: write to <a href={mailto}>{LEGAL.email}</a>.
+		</li>
+		<li>
+			<strong>Complaint</strong> to a data protection supervisory authority, for example in
+			the EU country where you live or work.
+		</li>
+	</ul>
+	<p>
+		A username and a sign-in method are needed to have an account; without them you can still
+		browse and upload anonymously.
+	</p>
+
+	<h2>Changes</h2>
+	<p>
+		This page is updated when the site's handling of data changes; the date above shows the
+		latest version.
+	</p>
+</Page>
+
+<style>
+	.table-wrap {
+		overflow-x: auto;
+	}
+</style>

@@ -1,0 +1,14 @@
+---
+// The Overview's live numbers alone (any staff), polled by the Overview
+// every few seconds. A partial: no layout, just the fragment. A failed read
+// answers 502, so the page keeps what it shows.
+import OverviewStatus from "@components/OverviewStatus.astro";
+import { loadFromApi } from "@lib/api/page";
+
+export const partial = true;
+
+const loaded = await loadFromApi(Astro, (api) => api.overview());
+if (!loaded.data) return new Response(null, { status: Astro.response.status || 502 });
+---
+
+<OverviewStatus overview={loaded.data} />

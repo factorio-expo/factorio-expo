@@ -1,0 +1,182 @@
+---
+// System -> Cleanups: each cleanup's dry
+// run, and a run (confirmed in the browser) that the audit log records.
+import Outcome from "@components/Outcome.astro";
+import Console from "@layouts/Console.astro";
+import { FormError, handlePost } from "@lib/api/actions";
+import { loadFromApi } from "@lib/api/page";
+import type { CleanupStatus } from "@lib/api/types";
+import { formatBytes, toGiB } from "@lib/format";
+import { formGiB, formText } from "@lib/forms";
+
+const posted = await handlePost(Astro, async (api, form) => {
+	const name = formText(form, "name");
+	let target: number | undefined;
+	if (form.has("target_gib")) {
+		target = formGiB(form, "target_gib");
+		if (target === undefined) throw new FormError("Give the target size in GiB.");
+	}
+	const result = await api.runCleanup(name, "", target);
+	const bytes = result.bytes === undefined ? "" : ` (${formatBytes(result.bytes)})`;
+	return `${name.replaceAll("_", " ")}: ${result.count} done${bytes}.`;
+});
+if (posted) return posted;
+
+const targetParam = Astro.url.searchParams.get("target_gib");
+const targetForm = new FormData();
+if (targetParam) targetForm.set("target_gib", targetParam);
+const targetBytes = targetParam ? formGiB(targetForm, "target_gib") : undefined;
+
+const loaded = await loadFromApi(Astro, (api) => api.cleanups(targetBytes));
+const overview = loaded.data;
+const number = new Intl.NumberFormat("en");
+
+const pendingText = (cleanup: CleanupStatus) => {
+	if (cleanup.takes_target && overview?.target_bytes === null) return "–";
+	const bytes = cleanup.pending_bytes ? ` · ${formatBytes(cleanup.pending_bytes)}` : "";
+	return `${number.format(cleanup.pending)}${bytes}`;
+};
+/** Hard deletes cannot be undone; they get the danger button. */
+const irreversible = (cleanup: CleanupStatus) => cleanup.name.startsWith("deleted_");
+const defaultTarget = overview
+	? toGiB(Math.max(0, overview.previews.total_bytes - overview.previews.full_bytes / 2))
+	: "";
+---
+
+<Console
+	title="Cleanups"
+	nav="cleanups"
+	description="Each shows what a run would do now; a run checks everything again and lands in the audit log."
+>
+	<Outcome
+		loadError={
+			loaded.error ??
+			(targetParam && targetBytes === undefined
+				? "The target must be a size in GiB."
+				: undefined)
+		}
+	/>
+	{overview && (
+		<div class="stack">
+			<section class="stats" aria-label="Preview files">
+				<div class="stat">
+					<span class="stat-label">Preview files</span>
+					<span class="stat-value">{formatBytes(overview.previews.total_bytes)}</span>
+					<span class="stat-sub">thumbnails and full images</span>
+				</div>
+				<div class="stat">
+					<span class="stat-label">Full images</span>
+					<span class="stat-value">{formatBytes(overview.previews.full_bytes)}</span>
+					<span class="stat-sub">
+						{number.format(overview.previews.full_files)} files
+					</span>
+				</div>
+			</section>
+
+			<ul class="cleanups">
+				{overview.cleanups.map((cleanup) => (
+					<li class="panel">
+						<div class="what">
+							<h2>{cleanup.title}</h2>
+							<p class="muted">{cleanup.description}</p>
+							{cleanup.takes_target && (
+								<form method="get" class="actions target">
+									<label>
+										Target
+										<input
+											type="text"
+											inputmode="decimal"
+											name="target_gib"
+											value={targetParam ?? defaultTarget}
+											aria-label="Target size in GiB"
+										/>
+										GiB
+									</label>
+									<button type="submit" class="secondary outline small">
+										Dry run
+									</button>
+								</form>
+							)}
+						</div>
+						<div class="run">
+							<span
+								class="pending"
+								data-pending={cleanup.pending > 0 ? "" : undefined}
+							>
+								{pendingText(cleanup)}
+							</span>
+							<form method="post" class="inline">
+								<input type="hidden" name="name" value={cleanup.name} />
+								{cleanup.takes_target && targetParam && (
+									<input type="hidden" name="target_gib" value={targetParam} />
+								)}
+								<button
+									type="submit"
+									class={irreversible(cleanup) ? "danger" : undefined}
+									disabled={
+										cleanup.pending === 0 ||
+										(cleanup.takes_target && targetBytes === undefined)
+									}
+									data-confirm={`Run "${cleanup.title}" now?${irreversible(cleanup) ? " This cannot be undone." : ""}`}
+								>
+									Run
+								</button>
+							</form>
+						</div>
+					</li>
+				))}
+			</ul>
+		</div>
+	)}
+</Console>
+
+<style>
+	.cleanups {
+		display: grid;
+		gap: 0.75rem;
+		margin: 0;
+		padding: 0;
+	}
+	.cleanups li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem 1.5rem;
+		list-style: none;
+	}
+	.what {
+		flex: 1 1 22rem;
+		min-width: 0;
+	}
+	.what h2 {
+		margin: 0 0 0.2rem;
+		font-size: 1rem;
+	}
+	.what p {
+		margin: 0;
+		font-size: 0.9rem;
+	}
+	.target {
+		margin-top: 0.6rem;
+	}
+	.target input {
+		width: 6rem;
+		margin: 0;
+	}
+	.run {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+	.pending {
+		min-width: 4rem;
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+		color: var(--pico-muted-color);
+	}
+	.pending[data-pending] {
+		color: var(--pico-color);
+		font-weight: 600;
+	}
+</style>

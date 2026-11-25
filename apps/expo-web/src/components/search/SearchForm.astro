@@ -1,0 +1,105 @@
+---
+// Browse/search form; behaviour in search-form.ts.
+import type { FacetCounts, Modset, NodeKind, TagGroup } from "@lib/api";
+import { hasAdvancedFilters, type SearchParams } from "@lib/search/query";
+import AdvancedSearch from "./AdvancedSearch.astro";
+import SortSelect from "./SortSelect.astro";
+import SearchIcon from "@lucide/astro/icons/search";
+
+interface Props {
+	search: SearchParams;
+	tagGroups: TagGroup[];
+	tagsError: string | null;
+	modsets: Modset[];
+	modsetsError: string | null;
+	/** Results per kind for the kind filter; absent when the search failed. */
+	kindCounts?: Partial<Record<NodeKind, number>>;
+	/** The other filters' counts, each without its own filter; absent when the search failed. */
+	facetCounts?: FacetCounts;
+	/** Open the advanced panel although no filter is set (`?advanced=1`, from the home page). */
+	advancedOpen?: boolean;
+}
+
+const {
+	search,
+	tagGroups,
+	tagsError,
+	modsets,
+	modsetsError,
+	kindCounts,
+	facetCounts,
+	advancedOpen = false,
+} = Astro.props;
+---
+
+<search>
+	<form method="get" action="/browse" id="search-form">
+		<fieldset role="group">
+			<input
+				type="search"
+				name="q"
+				value={search.q}
+				placeholder="Search blueprints…"
+				aria-label="Search blueprints"
+			/>
+			<button type="submit" class="search-submit" aria-label="Search" title="Search">
+				<SearchIcon aria-hidden="true" />
+			</button>
+		</fieldset>
+		<AdvancedSearch
+			search={search}
+			tagGroups={tagGroups}
+			tagsError={tagsError}
+			modsets={modsets}
+			modsetsError={modsetsError}
+			open={advancedOpen || hasAdvancedFilters(search)}
+			kindCounts={kindCounts}
+			facetCounts={facetCounts}
+		/>
+		{search.similarTo ? (
+			<>
+				<input type="hidden" name="similar_to" value={search.similarTo} />
+				<p class="similar-note" data-similar-note>
+					Blueprints like one you picked: the same top product, closest production rate
+					first. <a href="/browse">Show all blueprints</a>
+				</p>
+			</>
+		) : (
+			<SortSelect selected={search.sort} />
+		)}
+		{search.filterError && <small role="alert">{search.filterError}</small>}
+	</form>
+</search>
+
+<script>
+	import "./search-form.ts";
+</script>
+
+<style>
+	#search-form {
+		display: block;
+		--pico-border-radius: 0.5rem;
+	}
+
+	#search-form > :global(fieldset[role="group"]) {
+		--pico-border-radius: 5rem;
+	}
+
+	.similar-note {
+		margin: 1rem 0 0;
+		color: var(--pico-muted-color);
+	}
+
+	.search-submit {
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		padding-inline: 1.25rem;
+	}
+
+	.search-submit :global(svg) {
+		width: 1.25rem;
+		height: 1.25rem;
+	}
+</style>

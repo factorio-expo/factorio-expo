@@ -1,0 +1,37 @@
+---
+// Responsive grid of entry cards shared by browse, profile and collection pages.
+import type { EntryCardData } from "@utils/entry-card.ts";
+import EntryCard from "./EntryCard.astro";
+
+interface Props {
+	cards: EntryCardData[];
+	/** The viewer owns these listed entries: each card gets a pin toggle. */
+	pinnable?: boolean;
+	/** Card count loaded eagerly (above the fold). */
+	eager?: number;
+	/** The cards' heading level (3 under a section heading). */
+	headingLevel?: 2 | 3;
+}
+const { cards, pinnable = false, headingLevel = 2 } = Astro.props;
+// The first row is above the fold on most screens.
+const EAGER_CARDS = Astro.props.eager ?? 4;
+---
+
+<div class="grid">
+	{cards.map((card, index) => (
+		<EntryCard
+			card={card}
+			eager={index < EAGER_CARDS}
+			pinnable={pinnable}
+			headingLevel={headingLevel}
+		/>
+	))}
+</div>
+
+<style>
+	.grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+		gap: 1rem;
+	}
+</style>

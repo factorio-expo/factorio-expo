@@ -1,0 +1,39 @@
+---
+// A failed preview or analysis: what failed, why in plain words when the code
+// is known (lib/failure-reason.ts), and how to report it (the bug button,
+// ProblemReport.astro; the link opens it here, since phones keep the header's
+// bug icon in the menu). The raw code is not shown: the report dialog carries
+// the page's context to staff.
+import { failureReason } from "@lib/failure-reason";
+import Bug from "@lucide/astro/icons/bug";
+
+interface Props {
+	/** What failed, e.g. "Preview could not be generated." */
+	title: string;
+	code?: string;
+}
+
+const { title, code } = Astro.props;
+const reason = failureReason(code);
+---
+
+<p class="failure-note">
+	{reason ? `${title} ${reason}` : title}
+	<Bug class="bug" aria-hidden="true" />
+	<button type="button" class="link-button" data-problem-report-open>
+		Report a problem
+	</button>
+	if this looks wrong.
+</p>
+
+<style>
+	.failure-note {
+		text-align: center;
+	}
+
+	.failure-note :global(.bug) {
+		width: 1em;
+		height: 1em;
+		vertical-align: -0.125em;
+	}
+</style>

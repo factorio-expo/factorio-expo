@@ -1,0 +1,214 @@
+---
+import Page from "@layouts/Page.astro";
+import { CONTACT_LANGUAGES } from "@lib/legal";
+import { LEGAL } from "@lib/legal-env";
+
+const mailto = `mailto:${LEGAL.email}`;
+---
+
+<Page
+	title="Terms of use"
+	description="The rules for using Factorio Expo: the licence you grant for uploads, what may not be uploaded, the fair use policy, takedowns and moderation."
+>
+	<h1>Terms of use</h1>
+	<p>
+		<small>Last updated: 6 November 2026</small>
+	</p>
+	<p>
+		Factorio Expo is a free, non-commercial fan site run by {LEGAL.name}. By uploading,
+		commenting or creating an account you agree to these terms. Browsing needs no account and no
+		agreement beyond the law. How personal data is handled is in the{" "}
+		<a href="/privacy-policy">privacy policy</a>.
+	</p>
+
+	<h2 id="contact">Contact</h2>
+	<p>
+		One address for everything: questions, takedown requests, reports of illegal content,
+		security issues and requests from authorities: <a href={mailto}>{LEGAL.email}</a>. It is the
+		single point of contact for users and authorities under Articles 11 and 12 of the Digital
+		Services Act, answered by a person in {CONTACT_LANGUAGES.join(" or ")}.
+	</p>
+
+	<h2 id="age">Age</h2>
+	<p>You must be at least 16 years old to upload, comment or create an account.</p>
+
+	<h2 id="licence">Your uploads and the licence you grant</h2>
+	<p>
+		What you upload stays yours: the exchange string, its title, description and tags, and your
+		comments. You grant the operator of Factorio Expo a free, non-exclusive, worldwide licence
+		to:
+	</p>
+	<ul>
+		<li>
+			store the exact string you uploaded and its decoded contents, and keep every revision;
+		</li>
+		<li>
+			render previews with the game, analyse it (contents, power, production rates, platform
+			stats), and render and analyse it again, for example with a newer game version;
+		</li>
+		<li>
+			show and serve all of that to visitors, including the string to copy into the game and
+			the preview images, as far as the visibility you chose allows (a private entry is shown
+			to you only);
+		</li>
+		<li>index it for the site's search and list it on the site's pages.</li>
+	</ul>
+	<p>
+		The licence ends when the entry or comment is deleted. What is left is erased as the{" "}
+		<a href="/privacy-policy">privacy policy</a> describes, and backups expire within 30 days. A
+		deleted comment leaves an empty placeholder so the thread's numbering stays intact.
+	</p>
+	<p>
+		Sharing blueprints is the point of the site: anyone may copy a public or unlisted entry's
+		string and use it in their own game. These terms grant nothing beyond that; to republish
+		someone's blueprint elsewhere, ask its author.
+	</p>
+	<p>
+		You may only upload what you have the right to share: your own work, or someone else's with
+		their permission. An anonymous entry has no owner; whoever holds its edit link can change or
+		delete it, so keep the link private. A lost edit link cannot be recovered.
+	</p>
+
+	<h2 id="not-allowed">What may not be uploaded</h2>
+	<p>
+		These rules cover everything you put on the site: exchange strings, the labels, descriptions
+		and pixel art inside them, entry titles, descriptions, tags, comments and usernames.
+	</p>
+	<ul>
+		<li>Anything illegal, or that links to illegal content.</li>
+		<li>Someone else's work without their permission.</li>
+		<li>
+			Hate, harassment, threats, sexual content, graphic violence, or anything targeting a
+			person or group.
+		</li>
+		<li>Other people's personal data.</li>
+		<li>Spam, advertising, and titles, descriptions or tags that misrepresent the entry.</li>
+		<li>
+			Strings crafted to harm the site, its renderer or players' games. Found a weakness?
+			Write to <a href={mailto}>{LEGAL.email}</a> instead (see{" "}
+			<a href="/.well-known/security.txt">security.txt</a>).
+		</li>
+		<li>Usernames that impersonate someone else, staff, or Wube Software.</li>
+	</ul>
+
+	<h2 id="fair-use">Fair use policy</h2>
+	<p>
+		Every preview is rendered by one shared copy of Factorio, so everyone waits in the same
+		queue. To keep it fair:
+	</p>
+	<ul>
+		<li>
+			<strong>Rate limits.</strong> Uploads, previews, revisions, reports, comments and
+			sign-ins are limited per address and per account.
+		</li>
+		<li>
+			<strong>A cap on waiting renders.</strong> Each uploader (an account, or an address when
+			not signed in) may only have a limited number of blueprints waiting to render. An upload
+			that would go over it is refused as a whole with "too many blueprints waiting to
+			render"; try again once some have finished.
+		</li>
+		<li>
+			<strong>Order.</strong> One uploader's blueprints are spaced out, so a big book shares
+			the renderer with everyone else's work instead of blocking it. Signed-in uploads start
+			sooner than anonymous ones, and re-rendering an old preview waits a little longer. Quick
+			previews are not delayed.
+		</li>
+		<li>
+			<strong>Bot check.</strong> Uploads, previews, revisions and reports made without
+			signing in pass a Cloudflare Turnstile check.
+		</li>
+		<li>
+			<strong>Automation.</strong> Uploading by script or bot, mass imports and scraping need
+			a signed-in account and permission first: ask at <a href={mailto}>{LEGAL.email}</a>.
+		</li>
+		<li>
+			<strong>No working around it.</strong> Do not use several accounts or addresses to get
+			past a limit or a ban.
+		</li>
+	</ul>
+	<p>
+		The exact limits change with the load and are not published. Abuse can lead to tighter
+		limits, removed entries and a ban.
+	</p>
+
+	<h2 id="moderation">Moderation</h2>
+	<p>
+		Anyone can report an entry with its flag button, and signed-in users can report comments.
+		Every report is reviewed by a person; reports never hide anything automatically, however
+		many there are. The site makes no automated moderation decisions: the only automated checks
+		are the upload format and size limits, the rate limits and the bot check above.
+	</p>
+	<p>When content breaks these terms or the law, staff may, depending on how serious it is:</p>
+	<ul>
+		<li>delete an entry, or remove a comment (it stays as "Removed by staff");</li>
+		<li>
+			ban an account from uploading, commenting or reporting, for a time or permanently, and
+			block the addresses it used for a few hours;
+		</li>
+		<li>delete an account.</li>
+	</ul>
+	<p>
+		The reason for every decision is recorded. The site has no email address for you, so it
+		cannot always tell you itself; ask at <a href={mailto}>{LEGAL.email}</a> and you get the
+		reason. To object to a decision, write to the same address saying which entry, comment or
+		account it is about and why the decision is wrong. A person who did not make the decision
+		reviews it where possible, and you get an answer.
+	</p>
+
+	<h2 id="takedown">Takedown requests and illegal content</h2>
+	<p>
+		If an entry is your work posted without your permission, report it with its flag button,
+		choose "Someone else's work, posted without permission" and link to your original (a post,
+		video or save). For anything else illegal, or if you prefer email, write to{" "}
+		<a href={mailto}>{LEGAL.email}</a> with:
+	</p>
+	<ul>
+		<li>the link to each entry, blueprint or comment (for example /e/abc123def456);</li>
+		<li>why it is illegal or which of your rights it infringes;</li>
+		<li>your name and email address;</li>
+		<li>
+			a statement that you believe in good faith that the information is accurate and
+			complete.
+		</li>
+	</ul>
+	<p>
+		Each notice is handled promptly by a person. If you gave an email address you get a receipt
+		and the decision. The uploader can object as described under moderation above. Notices that
+		are knowingly false can lead to a ban from reporting.
+	</p>
+
+	<h2 id="accounts">Accounts</h2>
+	<p>
+		An account is for one person. Keep your sign-in methods safe: whoever can sign in to them
+		can act as you. You can delete your account at any time on your{" "}
+		<a href="/account">account page</a>; what happens then is in the{" "}
+		<a href="/privacy-policy">privacy policy</a>.
+	</p>
+
+	<h2 id="no-warranty">No warranty</h2>
+	<p>
+		Factorio Expo is free and provided as it is. Previews, analysis and production rates come
+		from the game but can still be wrong or missing. The site may change, pause or end features
+		or the whole service, entries expire when their uploader chose so, and entries may be
+		removed. Keep your own copy of every string you care about.
+	</p>
+	<p>
+		The operator is liable only for intent and gross negligence. This does not limit liability
+		for injury to life, body or health, or where the law does not allow a limit.
+	</p>
+
+	<h2 id="factorio">Factorio</h2>
+	<p>
+		Factorio Expo is not affiliated with or endorsed by Wube Software. The game's graphics,
+		icons and data shown on the site belong to Wube Software (
+		<a href="/about#unofficial">more</a>).
+	</p>
+
+	<h2 id="changes">Changes and applicable law</h2>
+	<p>
+		These terms change when the site does; the date above shows the latest version, and a change
+		that affects you is announced on the site first. Personal data is handled under the GDPR
+		(see the <a href="/privacy-policy">privacy policy</a>). If you are a consumer, the mandatory
+		consumer protection of the country you live in applies.
+	</p>
+</Page>

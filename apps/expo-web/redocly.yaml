@@ -1,0 +1,7 @@
+# The published read API (scripts/api-docs.ts): the public listener's OpenAPI
+# document without its x-internal operations and the schemas only they use.
+extends: []
+telemetry: off
+decorators:
+  remove-x-internal: on
+  remove-unused-components: on

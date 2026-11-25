@@ -1,0 +1,87 @@
+# Dependabot version updates. Security updates are separate and not delayed by
+# `cooldown`. Commit messages follow Conventional Commits (see commitlint).
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      go-minor-patch:
+        update-types: [minor, patch]
+
+  # One lockfile (pnpm-lock.yaml) and shared versions in pnpm-workspace.yaml
+  # `catalog:`; Dependabot's npm ecosystem handles pnpm workspaces and catalogs.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      js-minor-patch:
+        update-types: [minor, patch]
+
+  # Base images are pinned to exact patch tags; Dependabot proposes newer tags.
+  - package-ecosystem: docker
+    directories:
+      - /apps/expo-admin
+      - /apps/expo-api
+      - /apps/expo-db
+      - /apps/expo-db/postgres
+      - /apps/expo-game-data
+      - /apps/expo-render-worker
+      - /apps/expo-web
+      - /factorio/factorio-client
+      - /factorio/factorio-downloader
+      - /factorio/factorio-server
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      docker-images:
+        patterns: ["*"]
+
+  - package-ecosystem: docker-compose
+    directories:
+      - /
+      - /e2e
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      compose-images:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      actions:
+        patterns: ["*"]

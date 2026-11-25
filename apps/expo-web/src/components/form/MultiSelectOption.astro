@@ -1,0 +1,63 @@
+---
+// One checkbox row of MultiSelect (kept apart so grouped and flat lists share it).
+interface Props {
+	name: string;
+	value: string;
+	label: string;
+	order: number;
+	checked: boolean;
+	disabled?: boolean;
+	/** A game icon token shown in the chip (chip options only). */
+	icon?: string;
+	/** Show the option as a tag chip instead of plain text. */
+	chip?: boolean;
+	/** A number for the option: a muted one after the label, a badge inside a chip. */
+	count?: number;
+	/** One choice: a radio button (hidden, the label is the target) instead of a checkbox. */
+	single?: boolean;
+}
+
+const {
+	name,
+	value,
+	label,
+	order,
+	checked,
+	disabled,
+	chip = false,
+	icon,
+	count,
+	single,
+} = Astro.props;
+import TagChip from "@components/common/TagChip.astro";
+---
+
+<li data-option-order={order}>
+	<label>
+		<input
+			type={single ? "radio" : "checkbox"}
+			name={name}
+			value={value}
+			checked={checked}
+			disabled={disabled}
+			data-option-label={label}
+			aria-label={
+				chip && count !== undefined
+					? `${label}, ${count.toLocaleString("en-US")} ${count === 1 ? "result" : "results"}`
+					: undefined
+			}
+		/>
+		{chip ? <TagChip label={label} icon={icon} count={count} /> : <span>{label}</span>}
+		{!chip && count !== undefined && (
+			<small class="option-count">{count.toLocaleString("en-US")}</small>
+		)}
+	</label>
+</li>
+
+<style>
+	.option-count {
+		margin-left: auto;
+		padding-left: 0.75rem;
+		color: var(--pico-muted-color);
+	}
+</style>

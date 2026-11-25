@@ -1,0 +1,23 @@
+---
+import SignupForm from "@components/auth/SignupForm.astro";
+import Page from "@layouts/Page.astro";
+import { PUBLIC_TURNSTILE_SITE_KEY } from "astro:env/client";
+import { allowTurnstile } from "@lib/turnstile";
+import { redirectIfSignedIn } from "@lib/viewer";
+
+const signedIn = await redirectIfSignedIn(Astro, "/");
+if (signedIn) return signedIn;
+// The username form runs the sign-up human check.
+allowTurnstile(Astro.csp, PUBLIC_TURNSTILE_SITE_KEY);
+---
+
+<Page title="Choose a username" noindex>
+	<h1>Choose a username</h1>
+	<SignupForm />
+	<p>
+		<small>
+			Accounts are for people aged 16 or over. See the{" "}
+			<a href="/privacy-policy">privacy policy</a>.
+		</small>
+	</p>
+</Page>

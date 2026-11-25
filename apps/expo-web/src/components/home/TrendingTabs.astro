@@ -1,0 +1,94 @@
+---
+// Trending entries in three periods. Every period is rendered on load and the
+// tabs only switch which panel shows (trending-tabs.ts), so changing the period
+// needs no request. Without scripts the opening period is the only one visible.
+import EntryGrid from "@components/entry/EntryGrid.astro";
+import type { TrendingPeriod } from "@lib/api";
+import { TRENDING_PERIODS } from "@lib/home";
+import type { EntryCardData } from "@utils/entry-card.ts";
+
+interface Props {
+	cards: Record<TrendingPeriod, EntryCardData[]>;
+	/** The period shown first. */
+	current: TrendingPeriod;
+}
+const { cards, current } = Astro.props;
+---
+
+<div class="trending-tabs" data-trending-tabs>
+	<div class="tabs" role="tablist" aria-label="Trending period">
+		{TRENDING_PERIODS.map((period) => (
+			<button
+				type="button"
+				role="tab"
+				id={`trending-tab-${period.value}`}
+				aria-controls={`trending-panel-${period.value}`}
+				aria-selected={period.value === current ? "true" : "false"}
+				tabindex={period.value === current ? 0 : -1}
+			>
+				{period.label}
+			</button>
+		))}
+	</div>
+	{TRENDING_PERIODS.map((period) => (
+		<div
+			role="tabpanel"
+			id={`trending-panel-${period.value}`}
+			aria-labelledby={`trending-tab-${period.value}`}
+			hidden={period.value !== current}
+		>
+			{cards[period.value].length > 0 ? (
+				<EntryGrid
+					cards={cards[period.value]}
+					eager={period.value === current ? 4 : 0}
+					headingLevel={3}
+				/>
+			) : (
+				<p class="empty">Nothing has been viewed in this period yet.</p>
+			)}
+		</div>
+	))}
+</div>
+
+<script>
+	import "./trending-tabs.ts";
+</script>
+
+<style>
+	.tabs {
+		display: inline-flex;
+		gap: 0.15rem;
+		margin-bottom: 1rem;
+		padding: 0.2rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: 2rem;
+		background: var(--pico-card-background-color);
+	}
+	button {
+		width: auto;
+		margin: 0;
+		padding: 0.2rem 0.85rem;
+		border: 0;
+		border-radius: 2rem;
+		background: transparent;
+		color: var(--pico-muted-color);
+		font-size: 0.85rem;
+		box-shadow: none;
+		transition: background-color 0.15s;
+	}
+	button:hover,
+	button:focus-visible {
+		background: color-mix(in srgb, var(--pico-primary) 12%, transparent);
+	}
+	button[aria-selected="true"] {
+		background: var(--pico-primary-focus);
+		color: var(--pico-primary);
+		font-weight: 600;
+	}
+	.empty {
+		color: var(--pico-muted-color);
+	}
+	[hidden] {
+		display: none;
+	}
+</style>

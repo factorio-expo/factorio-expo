@@ -1,0 +1,169 @@
+---
+// System -> Settings: the global settings (emergency switches, site banner).
+// One form; only the values that differ from what the page was rendered with
+// are sent, so a stale form never reverts another staff member's change.
+import Outcome from "@components/Outcome.astro";
+import Console from "@layouts/Console.astro";
+import { FormError, handlePost } from "@lib/api/actions";
+import { loadFromApi } from "@lib/api/page";
+import type { StaffSetting } from "@lib/api/types";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { formText } from "@lib/forms";
+
+const posted = await handlePost(Astro, async (api, form) => {
+	const values: Record<string, string> = {};
+	for (const setting of await api.settings()) {
+		const value = form.get(`value:${setting.key}`);
+		if (typeof value !== "string") continue;
+		if (value !== formText(form, `orig:${setting.key}`) && value.trim() !== setting.value) {
+			values[setting.key] = value;
+		}
+	}
+	if (Object.keys(values).length === 0) throw new FormError("Nothing changed.");
+	const changed = await api.updateSettings(values, formText(form, "reason"));
+	return changed.length === 0
+		? "Nothing changed."
+		: `Saved ${changed.join(", ")}. The site applies it within a few seconds.`;
+});
+if (posted) return posted;
+
+const loaded = await loadFromApi(Astro, (api) => api.settings());
+const settings = loaded.data;
+
+/** A paused switch: a boolean ALLOW_ switch that is off. */
+const paused = (setting: StaffSetting) =>
+	setting.kind === "bool" && setting.key.startsWith("ALLOW_") && setting.value === "false";
+const pausedCount = settings?.filter(paused).length ?? 0;
+---
+
+<Console
+	title="Settings"
+	nav="settings"
+	description="Global settings the site reads within seconds: pause uploads, sign-ups or comments, or show visitors a banner. Every change is audit logged."
+>
+	<Outcome loadError={loaded.error} />
+	{settings && (
+		<form method="post" class="stack">
+			{pausedCount > 0 && (
+				<p class="panel warn" role="status">
+					{pausedCount} {pausedCount === 1 ? "switch is" : "switches are"} off: that part
+					of the site is paused for visitors.
+				</p>
+			)}
+			<ul class="settings">
+				{settings.map((setting) => (
+					<li class="panel">
+						<div class="what">
+							<h2>
+								<code>{setting.key}</code>
+								{paused(setting) && (
+									<span class="pill" data-tone="danger">
+										paused
+									</span>
+								)}
+							</h2>
+							<p class="muted">{setting.description}</p>
+							{setting.updated_at && (
+								<p class="muted">
+									Last changed {isoDateTime(setting.updated_at)}
+									{setting.updated_by && ` by ${setting.updated_by}`}
+								</p>
+							)}
+						</div>
+						<div class="field">
+							<input
+								type="hidden"
+								name={`orig:${setting.key}`}
+								value={setting.value}
+							/>
+							{setting.kind === "bool" && (
+								<select name={`value:${setting.key}`} aria-label={setting.key}>
+									<option value="true" selected={setting.value === "true"}>
+										On (true)
+									</option>
+									<option value="false" selected={setting.value === "false"}>
+										Off (false)
+									</option>
+								</select>
+							)}
+							{setting.kind === "int" && (
+								<input
+									type="number"
+									step="1"
+									name={`value:${setting.key}`}
+									value={setting.value}
+									min={setting.min}
+									max={setting.max}
+									aria-label={setting.key}
+								/>
+							)}
+							{setting.kind === "string" && (
+								<input
+									type="text"
+									name={`value:${setting.key}`}
+									value={setting.value}
+									maxlength={setting.max_runes ?? 500}
+									aria-label={setting.key}
+								/>
+							)}
+						</div>
+					</li>
+				))}
+			</ul>
+			<label>
+				Reason (audit log, optional)
+				<input type="text" name="reason" maxlength="500" />
+			</label>
+			<div class="actions">
+				<button
+					type="submit"
+					data-confirm="Save these settings? They apply to the live site within seconds."
+				>
+					Save settings
+				</button>
+			</div>
+		</form>
+	)}
+</Console>
+
+<style>
+	.settings {
+		display: grid;
+		gap: 0.75rem;
+		margin: 0;
+		padding: 0;
+	}
+	.settings li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem 1.5rem;
+		list-style: none;
+	}
+	.what {
+		flex: 1 1 22rem;
+		min-width: 0;
+	}
+	.what h2 {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		margin: 0 0 0.2rem;
+		font-size: 1rem;
+	}
+	.what p {
+		margin: 0;
+		font-size: 0.9rem;
+	}
+	.field {
+		flex: 0 1 22rem;
+		min-width: 12rem;
+	}
+	.field :is(input, select) {
+		margin: 0;
+	}
+	.warn {
+		border-left: 0.25rem solid var(--pico-del-color);
+	}
+</style>

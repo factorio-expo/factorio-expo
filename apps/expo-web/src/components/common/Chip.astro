@@ -1,0 +1,91 @@
+---
+// Icon tile for a catalog-like fact (entity, recipe). The label is a tooltip
+// on hover, keyboard focus and tap (the tile is focusable); the default slot
+// holds a trailing badge such as a count.
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+
+interface Props {
+	/** A formatRichText icon token, e.g. "[entity=assembling-machine-2]". */
+	iconToken: string;
+	label: string;
+}
+
+const { iconToken, label } = Astro.props;
+---
+
+<span class="chip" tabindex="0" role="img" aria-label={label} data-label={label}>
+	<span class="chip-icon" set:html={formatRichText(iconToken)} />
+	<span class="chip-badge">
+		<slot />
+	</span>
+</span>
+
+<style>
+	.chip {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+		cursor: default;
+	}
+
+	.chip-icon {
+		display: block;
+		width: 1.75rem;
+		height: 1.75rem;
+		overflow: hidden;
+		font-size: 0;
+	}
+
+	.chip-icon :global(.icon) {
+		display: block;
+		width: 1.75rem;
+		height: 1.75rem;
+		font-size: 1.75rem;
+	}
+
+	.chip-badge {
+		position: absolute;
+		right: 1px;
+		bottom: 0;
+		font-size: 0.65rem;
+		line-height: 1;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		text-shadow:
+			0 0 2px var(--pico-background-color),
+			0 0 2px var(--pico-background-color);
+	}
+
+	.chip-badge:empty {
+		display: none;
+	}
+
+	.chip::after {
+		content: attr(data-label);
+		position: absolute;
+		z-index: 10;
+		bottom: calc(100% + 0.3rem);
+		left: 50%;
+		transform: translateX(-50%);
+		padding: 0.15rem 0.45rem;
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-contrast-background);
+		color: var(--pico-contrast-inverse);
+		font-size: 0.75rem;
+		white-space: nowrap;
+		pointer-events: none;
+		opacity: 0;
+		visibility: hidden;
+	}
+
+	.chip:hover::after,
+	.chip:focus::after {
+		opacity: 1;
+		visibility: visible;
+	}
+</style>

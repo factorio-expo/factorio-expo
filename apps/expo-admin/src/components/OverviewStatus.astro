@@ -1,0 +1,128 @@
+---
+// The Overview's live numbers: key counts, job queues and the render
+// worker's readiness. Rendered in the page and again by /partials/overview,
+// which the Overview polls.
+import type { JobCounts, Overview } from "@lib/api/types";
+
+export interface Props {
+	overview: Overview;
+}
+
+const { overview } = Astro.props;
+const number = new Intl.NumberFormat("en");
+const jobRows: { label: string; counts: JobCounts }[] = [
+	{ label: "Previews", counts: overview.jobs.previews },
+	{ label: "Analyses", counts: overview.jobs.analyses },
+	{ label: "Search sync", counts: overview.jobs.search },
+];
+const failedJobs = jobRows.reduce((sum, row) => sum + row.counts.failed, 0);
+const pendingJobs = jobRows.reduce((sum, row) => sum + row.counts.pending, 0);
+const worker = overview.render_worker;
+const workerLabel: Record<string, string> = {
+	ready: "Ready",
+	not_ready: "Not ready",
+	unreachable: "Unreachable",
+};
+const componentTone = (status: string) =>
+	status === "ready" ? "ok" : status === "busy" ? "warn" : status === "unknown" ? "" : "danger";
+---
+
+<section class="stats" aria-label="Key numbers">
+	<div class="stat">
+		<span class="stat-label">Uploads today (UTC)</span>
+		<span class="stat-value">{number.format(overview.uploads.today)}</span>
+		<span class="stat-sub">{number.format(overview.uploads.week)} in 7 days</span>
+	</div>
+	<a
+		class="stat"
+		href="/reports/entries"
+		data-tone={overview.reports.entry_reports > 0 ? "warn" : undefined}
+	>
+		<span class="stat-label">Entry reports</span>
+		<span class="stat-value">{number.format(overview.reports.entry_reports)}</span>
+		<span class="stat-sub">open, on {number.format(overview.reports.entries)} entries</span>
+	</a>
+	<a
+		class="stat"
+		href="/reports/comments"
+		data-tone={overview.reports.comment_reports > 0 ? "warn" : undefined}
+	>
+		<span class="stat-label">Comment reports</span>
+		<span class="stat-value">{number.format(overview.reports.comment_reports)}</span>
+		<span class="stat-sub">open, on {number.format(overview.reports.comments)} comments</span>
+	</a>
+	<a class="stat" href="/jobs" data-tone={failedJobs > 0 ? "danger" : undefined}>
+		<span class="stat-label">Failed jobs</span>
+		<span class="stat-value">{number.format(failedJobs)}</span>
+		<span class="stat-sub">{number.format(pendingJobs)} pending</span>
+	</a>
+</section>
+
+<div class="columns">
+	<section class="panel" aria-labelledby="jobs-heading">
+		<div class="panel-head">
+			<h2 id="jobs-heading">Jobs</h2>
+			{failedJobs > 0 && <a href="/jobs">Failed jobs</a>}
+		</div>
+		<table class="data">
+			<thead>
+				<tr>
+					<th scope="col">Queue</th>
+					<th scope="col" class="num">
+						Pending
+					</th>
+					<th scope="col" class="num">
+						Failed
+					</th>
+				</tr>
+			</thead>
+			<tbody>
+				{jobRows.map((row) => (
+					<tr>
+						<th scope="row">{row.label}</th>
+						<td class="num">{number.format(row.counts.pending)}</td>
+						<td class="num" data-failed={row.counts.failed > 0 ? "" : undefined}>
+							{number.format(row.counts.failed)}
+						</td>
+					</tr>
+				))}
+			</tbody>
+		</table>
+	</section>
+
+	<section class="panel" aria-labelledby="worker-heading">
+		<div class="panel-head">
+			<h2 id="worker-heading">Render worker</h2>
+			<span class="pill" data-tone={worker.status === "ready" ? "ok" : "danger"}>
+				{workerLabel[worker.status] ?? worker.status}
+			</span>
+		</div>
+		{Object.keys(worker.components).length === 0 ? (
+			<p class="muted">No readiness details: the worker did not answer.</p>
+		) : (
+			<table class="data">
+				<tbody>
+					{Object.entries(worker.components)
+						.sort(([a], [b]) => a.localeCompare(b))
+						.map(([name, status]) => (
+							<tr>
+								<th scope="row">{name.replaceAll("_", " ")}</th>
+								<td class="num">
+									<span class="pill" data-tone={componentTone(status)}>
+										{status}
+									</span>
+								</td>
+							</tr>
+						))}
+				</tbody>
+			</table>
+		)}
+	</section>
+</div>
+
+<style>
+	td[data-failed] {
+		color: var(--pico-del-color);
+		font-weight: 600;
+	}
+</style>

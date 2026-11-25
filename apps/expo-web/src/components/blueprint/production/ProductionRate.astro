@@ -1,0 +1,16 @@
+---
+import { formatRate } from "@utils/production.ts";
+
+interface Props {
+	value?: number;
+	type: "item" | "fluid" | "pollution";
+	/** A per tile or per MW ratio: three significant digits; the unit and multiplier apply like any rate. */
+	ratio?: boolean;
+}
+
+const { value = 0, type, ratio = false } = Astro.props;
+---
+
+<span data-production-rate={value} data-rate-type={type} data-rate-ratio={ratio ? "" : undefined}>
+	{formatRate(value, undefined, type, 1, ratio)}
+</span>

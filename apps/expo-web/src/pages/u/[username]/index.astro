@@ -1,0 +1,61 @@
+---
+// Public profile, Entries tab: pinned entries large on top, then every public
+// entry, paged. The owner gets pin buttons on the cards and the Arrange
+// dialog. Everything here is public, so it renders server-side.
+import Pagination from "@components/common/Pagination.astro";
+import EntryGrid from "@components/entry/EntryGrid.astro";
+import ProfileLayout from "@components/profile/ProfileLayout.astro";
+import ProfilePins from "@components/profile/ProfilePins.astro";
+import { listOffset, loadProfile, offsetHref } from "@lib/profile";
+import { toCard } from "@utils/entry-card.ts";
+
+/** The API's limit (Go `catalog.MaxPinnedEntries`). */
+const MAX_PINS = 6;
+const PAGE_SIZE = 20;
+const profile = await loadProfile(Astro);
+if (!profile) return Astro.rewrite("/404");
+const { user, owner, api, description } = profile;
+const offset = listOffset(Astro.url);
+const [entries, pins] = await Promise.all([
+	api.users.entries(user.username, { limit: PAGE_SIZE, offset }),
+	api.users.pins(user.username),
+]);
+---
+
+<ProfileLayout
+	user={user}
+	owner={owner}
+	tab="entries"
+	title={user.username}
+	description={description}
+>
+	{offset === 0 && (
+		<ProfilePins username={user.username} pins={pins.entries} owner={owner} max={MAX_PINS} />
+	)}
+	<section aria-labelledby="entries-heading">
+		<h2 id="entries-heading" class="entries-heading">
+			Entries <small>{entries.total.toLocaleString("en-US")}</small>
+		</h2>
+		{entries.entries.length === 0 ? (
+			<p>No public entries yet.</p>
+		) : (
+			<>
+				<EntryGrid cards={entries.entries.map((entry) => toCard(entry))} pinnable={owner} />
+				<Pagination
+					label="Public entry pages"
+					total={entries.total}
+					limit={PAGE_SIZE}
+					offset={offset}
+					href={(next) => offsetHref(Astro.url, next)}
+				/>
+			</>
+		)}
+	</section>
+</ProfileLayout>
+
+<style>
+	.entries-heading small {
+		color: var(--pico-muted-color);
+		font-weight: normal;
+	}
+</style>

@@ -1,0 +1,147 @@
+---
+// A challenge's entries: each card with its rank, score or why it is not
+// ranked, its votes once shown, and a vote toggle while voting is open. Once
+// the challenge has ended, the top three by score and by community vote stand
+// on podiums of their own, above the other entries.
+import Trophy from "@lucide/astro/icons/trophy";
+import Vote from "@lucide/astro/icons/vote";
+import EntryCard from "@components/entry/EntryCard.astro";
+import type { ChallengeDetail, ChallengeEntry } from "@lib/api";
+import { toCard } from "@utils/entry-card.ts";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import ChallengePodium, { type Place } from "./ChallengePodium.astro";
+import ChallengeVerdict from "./ChallengeVerdict.astro";
+
+interface Props {
+	challenge: ChallengeDetail;
+}
+const { challenge } = Astro.props;
+const viewer = challenge.viewer;
+const ended = challenge.status === "closed";
+const votesText = (votes: number) => `${votes} ${votes === 1 ? "vote" : "votes"}`;
+
+function topThree(
+	placeOf: (item: ChallengeEntry) => number | undefined,
+	detail: (item: ChallengeEntry) => string,
+): Place[] {
+	return challenge.entries
+		.flatMap((item) => {
+			const place = placeOf(item);
+			return place && place <= 3 ? [{ item, place, detail: detail(item) }] : [];
+		})
+		.toSorted((a, b) => a.place - b.place);
+}
+const scorePodium =
+	ended && challenge.scores_visible
+		? topThree(
+				(item) => item.rank,
+				(item) => item.score_text ?? "",
+			)
+		: [];
+const votePodium =
+	ended && challenge.votes_visible
+		? topThree(
+				(item) => item.vote_rank,
+				(item) => votesText(item.votes ?? 0),
+			)
+		: [];
+// The score podium's entries leave the list; the vote podium's stay in it.
+const onPodium = new Set(scorePodium.map(({ item }) => item.submission_id));
+const rest = challenge.entries.filter((item) => !onPodium.has(item.submission_id));
+---
+
+{scorePodium.length > 0 && (
+	<ChallengePodium kind="score" heading="Winners" lead="Ranked by the goal" places={scorePodium}>
+		<Trophy slot="icon" aria-hidden="true" />
+	</ChallengePodium>
+)}
+{votePodium.length > 0 && (
+	<ChallengePodium
+		kind="vote"
+		heading="Community vote"
+		lead="The entries the community liked most"
+		places={votePodium}
+	>
+		<Vote slot="icon" aria-hidden="true" />
+	</ChallengePodium>
+)}
+{(scorePodium.length > 0 || votePodium.length > 0) && rest.length > 0 && (
+	<h3 class="rest-heading">{scorePodium.length > 0 ? "Other entries" : "All entries"}</h3>
+)}
+<div class="entries" data-challenge-slug={challenge.slug}>
+	{rest.map((item, index) => {
+		const own = viewer?.entry_id === item.entry.id;
+		const canVote = viewer?.can_vote && !own && item.status !== "rejected";
+		return (
+			<div class="entry" id={`entry-${item.entry.id}`} data-status={item.status}>
+				{item.rank && (
+					<span class="rank" aria-label={`Rank ${item.rank}`}>
+						#{item.rank}
+					</span>
+				)}
+				<EntryCard card={toCard(item.entry)} eager={index < 4} />
+				<div class="verdict">
+					{own && <strong>Your entry</strong>}
+					<ChallengeVerdict item={item} />
+					{item.votes !== undefined && <p>{votesText(item.votes)}</p>}
+					{canVote && (
+						<button
+							type="button"
+							class:list={["vote", { outline: !item.voted_by_viewer }]}
+							aria-pressed={item.voted_by_viewer ? "true" : "false"}
+							data-challenge-vote={item.entry.id}
+							disabled={!item.voted_by_viewer && (viewer?.votes_left ?? 0) === 0}
+						>
+							{item.voted_by_viewer ? "Voted" : "Vote"}
+						</button>
+					)}
+				</div>
+			</div>
+		);
+	})}
+</div>
+<p data-vote-status role="status" aria-live="polite"></p>
+
+<style>
+	.entries {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+		gap: 1rem;
+	}
+	.entry {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+	}
+	.entry[data-status="rejected"] :global(.entry-card) {
+		opacity: 0.6;
+	}
+	.rank {
+		position: absolute;
+		top: 0.5rem;
+		left: 0.5rem;
+		z-index: 1;
+		padding: 0.1rem 0.5rem;
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-primary-background);
+		color: var(--pico-primary-inverse);
+		font-weight: 700;
+	}
+	.verdict {
+		padding: 0.5rem 0;
+		font-size: 0.9rem;
+	}
+	.verdict p,
+	.verdict details {
+		margin: 0.25rem 0;
+	}
+	.vote {
+		width: auto;
+		padding: 0.25rem 1rem;
+	}
+	.rest-heading {
+		margin-top: 0.5rem;
+		padding-top: 1.25rem;
+		border-top: 1px solid var(--pico-muted-border-color);
+	}
+</style>

@@ -1,0 +1,63 @@
+---
+// One challenge in the challenge list: icons, title, summary, goal, dates.
+import type { Challenge } from "@lib/api";
+import ChallengeDates from "./ChallengeDates.astro";
+import ChallengeIcon from "./ChallengeIcon.astro";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+
+interface Props {
+	challenge: Challenge;
+}
+const { challenge } = Astro.props;
+const href = `/challenges/${encodeURIComponent(challenge.slug)}`;
+---
+
+<article class="challenge-card">
+	<header>
+		<ChallengeIcon icons={challenge.icons} />
+		<h3>
+			<a href={href} set:html={formatRichText(challenge.title)} />
+		</h3>
+	</header>
+	{challenge.summary && <p set:html={formatRichText(challenge.summary)} />}
+	<p class="goal">
+		<strong>Goal:</strong> <span set:html={formatRichText(challenge.rules.goal)} />
+	</p>
+	<footer>
+		<ChallengeDates challenge={challenge} compact />
+		<span class="muted">
+			{challenge.entry_count}
+			{challenge.entry_count === 1 ? " entry" : " entries"}
+		</span>
+	</footer>
+</article>
+
+<style>
+	.challenge-card {
+		display: flex;
+		flex-direction: column;
+		margin: 0;
+	}
+	.challenge-card header {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 0.5rem;
+	}
+	.challenge-card h3 {
+		margin: 0;
+	}
+	.challenge-card footer {
+		margin-top: auto;
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+	.goal {
+		font-size: 0.9rem;
+	}
+	.muted {
+		color: var(--pico-muted-color);
+	}
+</style>

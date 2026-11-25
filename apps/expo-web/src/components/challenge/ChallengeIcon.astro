@@ -1,0 +1,63 @@
+---
+// A challenge's icons in a square, laid out like a blueprint's: one fills
+// it, two sit side by side, three or four make a 2x2 grid.
+import GameIcon from "@factorio-expo/ui/game/GameIcon.astro";
+import { scanTokens } from "@factorio-expo/ui/game/icon-token.ts";
+
+interface Props {
+	icons: string;
+	/** The square's size (a CSS length). */
+	size?: string;
+}
+const { icons, size = "3rem" } = Astro.props;
+const tokens = scanTokens(icons).slice(0, 4);
+---
+
+{tokens.length > 0 && (
+	<span
+		class="challenge-icon"
+		data-count={tokens.length}
+		style={`--challenge-icon-size:${size}`}
+		aria-hidden="true"
+	>
+		{tokens.map((icon) => (
+			<GameIcon
+				prototypeType={icon.type}
+				name={icon.name}
+				quality={icon.quality}
+				decorative
+			/>
+		))}
+	</span>
+)}
+
+<style>
+	.challenge-icon {
+		display: inline-grid;
+		flex: none;
+		width: var(--challenge-icon-size);
+		height: var(--challenge-icon-size);
+		grid-template-columns: repeat(2, 1fr);
+		grid-template-rows: repeat(2, 1fr);
+		place-items: center;
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-card-sectioning-background-color);
+		font-size: var(--challenge-icon-size);
+	}
+	.challenge-icon > :global(.factorio-icon) {
+		font-size: 0.42em;
+	}
+	.challenge-icon[data-count="1"] {
+		grid-template-columns: 1fr;
+		grid-template-rows: 1fr;
+	}
+	.challenge-icon[data-count="1"] > :global(.factorio-icon) {
+		font-size: 0.8em;
+	}
+	.challenge-icon[data-count="2"] {
+		grid-template-rows: 1fr;
+	}
+	.challenge-icon[data-count="2"] > :global(.factorio-icon) {
+		font-size: 0.44em;
+	}
+</style>

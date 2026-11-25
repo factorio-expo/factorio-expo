@@ -1,0 +1,71 @@
+---
+// Favorite toggle. Logged-out viewers see only the static count (if any); the
+// toggle shows for signed-in viewers (data-auth-only) and favorite-button.ts drives it.
+import Star from "@lucide/astro/icons/star";
+
+interface Props {
+	entryId: string;
+	/** Favorites count to display and keep in sync; omit when unknown. */
+	count?: number;
+	/** The viewer's state, from the API read that rendered the page. */
+	favorited: boolean;
+}
+const { entryId, count, favorited } = Astro.props;
+const label = favorited ? "Remove from favorites" : "Add to favorites";
+---
+
+<span class="favorite" data-favorite data-entry-id={entryId} data-count={count}>
+	{count !== undefined && (
+		<span class="static" data-favorite-static data-guest-only>
+			<Star aria-hidden="true" />
+			{count}
+		</span>
+	)}
+	<button
+		type="button"
+		class="icon-button"
+		data-favorite-toggle
+		data-placement="left"
+		aria-pressed={String(favorited)}
+		aria-label={label}
+		data-tooltip={label}
+		data-auth-only
+	>
+		<Star aria-hidden="true" />
+		{count !== undefined && <span data-favorite-text>{count}</span>}
+	</button>
+</span>
+
+<script>
+	import "./favorite-button.ts";
+</script>
+
+<style>
+	/* Flex, not inline: an inline wrapper would sit the count on the text
+	   baseline and leave descender space under it, so it would not line up
+	   with neighbours such as the card's views count. */
+	.favorite {
+		display: inline-flex;
+		align-items: center;
+	}
+	.favorite :global(svg) {
+		width: 1.15rem;
+		height: 1.15rem;
+		flex: none;
+	}
+	.static,
+	button {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+	button {
+		width: auto;
+		min-width: 2.75rem;
+		padding: 0 0.6rem;
+		font-size: inherit;
+	}
+	button[aria-pressed="true"] :global(svg) {
+		fill: currentColor;
+	}
+</style>

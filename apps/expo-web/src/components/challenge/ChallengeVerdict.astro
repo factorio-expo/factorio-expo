@@ -1,0 +1,34 @@
+---
+// What the rule check says about one challenge entry: waiting for the
+// analysis, its score (or "meets the rules" when the score is hidden), or why
+// it is not ranked.
+import type { ChallengeEntry } from "@lib/api";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+
+interface Props {
+	item: ChallengeEntry;
+	/** Show a rejection's reasons expanded (the viewer's own entry). */
+	open?: boolean;
+}
+const { item, open = false } = Astro.props;
+---
+
+{item.status === "pending" && <p>Waiting for the analysis.</p>}
+{item.status === "accepted" &&
+	(item.score_text ? (
+		<p>
+			<strong>Score:</strong> <span set:html={formatRichText(item.score_text)} />
+		</p>
+	) : (
+		<p>Meets the rules.</p>
+	))}
+{item.status === "rejected" && (
+	<details open={open}>
+		<summary>Not ranked</summary>
+		<ul>
+			{item.reasons.map((reason) => (
+				<li set:html={formatRichText(reason)} />
+			))}
+		</ul>
+	</details>
+)}

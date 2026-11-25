@@ -1,0 +1,37 @@
+---
+// Compare: the first press on a blueprint picks it (kept in sessionStorage),
+// the press on a second blueprint opens /compare?a=&b= with both. Pressing it
+// again on the picked blueprint unpicks it. compare-button.ts drives it; it
+// shows only for a blueprint of a public entry that is not a quick preview
+// (the only ones /compare accepts).
+import GitCompare from "@lucide/astro/icons/git-compare";
+
+interface Props {
+	blueprintId: string;
+}
+const { blueprintId } = Astro.props;
+---
+
+<button
+	type="button"
+	class="icon-button compare-button"
+	data-compare
+	data-blueprint-id={blueprintId}
+	data-placement="top"
+	aria-pressed="false"
+	aria-label="Compare"
+	data-tooltip="Pick to compare with another blueprint"
+>
+	<GitCompare aria-hidden="true" />
+</button>
+
+<script>
+	import "./compare-button.ts";
+</script>
+
+<style>
+	.compare-button[aria-pressed="true"] {
+		--pico-color: var(--pico-primary);
+		background: var(--pico-primary-focus);
+	}
+</style>

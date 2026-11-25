@@ -1,0 +1,265 @@
+---
+// Problem reports from the site's bug button: the open ones oldest first, or
+// those resolved in the last 7 days (then deleted). Close one with a status
+// and a note (its contact address goes with it), ban a spammer from
+// reporting, copy one as a GitHub issue.
+import Outcome from "@components/Outcome.astro";
+import BanReporterForm from "@components/BanReporterForm.astro";
+import Console from "@layouts/Console.astro";
+import { FormError, handlePost } from "@lib/api/actions";
+import { loadFromApi } from "@lib/api/page";
+import type { ProblemReport, ProblemStatus } from "@lib/api/types";
+import { banReporterInput, reporterLabel } from "@lib/bans";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { formText } from "@lib/forms";
+import { problemIssueMarkdown } from "@lib/problem-issue";
+import { sitePageUrl } from "@lib/site";
+
+const statuses: { key: ProblemStatus; label: string }[] = [
+	{ key: "fixed", label: "Fixed" },
+	{ key: "wont_fix", label: "Won't fix" },
+	{ key: "duplicate", label: "Duplicate" },
+	{ key: "spam", label: "Spam" },
+];
+const isStatus = (value: string): value is ProblemStatus => statuses.some((s) => s.key === value);
+const statusLabel = (status: string) => statuses.find((s) => s.key === status)?.label ?? status;
+
+const posted = await handlePost(Astro, async (api, form) => {
+	const id = formText(form, "report_id");
+	switch (formText(form, "action")) {
+		case "resolve": {
+			const status = formText(form, "status");
+			if (!isStatus(status)) throw new FormError("Pick how it ended.");
+			await api.resolveProblemReport(id, status, formText(form, "note"));
+			return "Report closed; its contact address is deleted.";
+		}
+		case "note":
+			await api.setProblemReportNote(id, formText(form, "note"));
+			return "Note saved.";
+		case "ban-reporter": {
+			await api.banProblemReporter(id, banReporterInput(form));
+			return "Reporter banned from reporting; the report is closed as spam.";
+		}
+		default:
+			throw new FormError("Unknown action.");
+	}
+});
+if (posted) return posted;
+
+const view = Astro.url.searchParams.get("status") === "resolved" ? "resolved" : "open";
+const loaded = await loadFromApi(Astro, (api) => api.problemReports(view));
+const page = loaded.data;
+const number = new Intl.NumberFormat("en");
+---
+
+<Console
+	title="Problem reports"
+	nav="problem-reports"
+	description="Reports from the site's bug button. Resolved ones are deleted after 7 days; a contact address goes when the report is closed."
+>
+	<Outcome loadError={loaded.error} />
+
+	<nav class="tabs" aria-label="Filter problem reports">
+		<a href="/reports/problems" aria-current={view === "open" ? "page" : undefined}>
+			Open {page && <span class="count">{number.format(page.counts.open)}</span>}
+		</a>
+		<a
+			href="/reports/problems?status=resolved"
+			aria-current={view === "resolved" ? "page" : undefined}
+		>
+			Resolved {page && <span class="count">{number.format(page.counts.resolved)}</span>}
+		</a>
+	</nav>
+
+	{page && page.reports.length === 0 && (
+		<p class="empty">
+			{view === "open" ? "No open problem reports." : "Nothing resolved in the last 7 days."}
+		</p>
+	)}
+	<div class="stack">
+		{page?.reports.map((report) => {
+			const pageLink = report.page ? sitePageUrl(report.page) : undefined;
+			const context = Object.entries(report.context);
+			return (
+				<article class="panel" aria-labelledby={`problem-${report.id}`}>
+					<div class="panel-head">
+						<h2 id={`problem-${report.id}`}>{isoDateTime(report.created_at)}</h2>
+						{report.resolved_at ? (
+							<span class="pill">{statusLabel(report.status)}</span>
+						) : (
+							<span class="pill" data-tone="warn">
+								open
+							</span>
+						)}
+					</div>
+					<p class="meta">
+						<span>
+							from{" "}
+							{report.reporter.username ? (
+								<a
+									href={`/users?q=${encodeURIComponent(report.reporter.username)}`}
+								>
+									{report.reporter.username}
+								</a>
+							) : (
+								reporterLabel(report.reporter)
+							)}
+						</span>
+						{report.email && (
+							<span>
+								reply to <a href={`mailto:${report.email}`}>{report.email}</a>
+							</span>
+						)}
+						{report.page && (
+							<span>
+								on{" "}
+								{pageLink ? (
+									<a href={pageLink} target="_blank" rel="noopener noreferrer">
+										{report.page}
+									</a>
+								) : (
+									<code>{report.page}</code>
+								)}
+							</span>
+						)}
+						{report.entry_id && (
+							<span>
+								entry{" "}
+								<a href={`/entries/${encodeURIComponent(report.entry_id)}`}>
+									<code>{report.entry_id}</code>
+								</a>
+							</span>
+						)}
+						{report.blueprint_id && (
+							<span>
+								blueprint <code>{report.blueprint_id}</code>
+							</span>
+						)}
+					</p>
+					<p class="body">{report.body}</p>
+					{(context.length > 0 || report.user_agent) && (
+						<details>
+							<summary>Page context</summary>
+							<dl class="facts">
+								{context.map(([key, value]) => (
+									<>
+										<dt>{key}</dt>
+										<dd>{value}</dd>
+									</>
+								))}
+								{report.user_agent && (
+									<>
+										<dt>browser</dt>
+										<dd>{report.user_agent}</dd>
+									</>
+								)}
+							</dl>
+						</details>
+					)}
+					<details>
+						<summary>As a GitHub issue</summary>
+						<textarea
+							readonly
+							rows="8"
+							aria-label="GitHub issue text"
+							set:text={problemIssueMarkdown(report, pageLink)}
+						/>
+					</details>
+					{report.resolved_at && (
+						<p class="muted">
+							Closed by {report.resolved_by}, {isoDateTime(report.resolved_at)}.
+						</p>
+					)}
+
+					{report.resolved_at ? (
+						<form method="post" class="panel-foot actions">
+							<input type="hidden" name="report_id" value={report.id} />
+							<input
+								type="text"
+								name="note"
+								value={report.staff_note}
+								placeholder="Staff note"
+								aria-label="Staff note"
+								maxlength="1000"
+							/>
+							<button type="submit" name="action" value="note" class="secondary">
+								Save note
+							</button>
+						</form>
+					) : (
+						<>
+							<form method="post" class="panel-foot actions">
+								<input type="hidden" name="report_id" value={report.id} />
+								<input
+									type="text"
+									name="note"
+									value={report.staff_note}
+									placeholder="Staff note (optional)"
+									aria-label="Staff note"
+									maxlength="1000"
+								/>
+								<select name="status" aria-label="How it ended" required>
+									{statuses.map((s) => (
+										<option value={s.key}>{s.label}</option>
+									))}
+								</select>
+								<button type="submit" name="action" value="resolve">
+									Close
+								</button>
+							</form>
+							<details class="more">
+								<summary>Ban the reporter from reporting</summary>
+								<BanReporterForm
+									reportId={report.id}
+									anonymous={report.reporter.anonymous}
+									label="Ban and close as spam"
+									scope="(entries, comments, problems)"
+								/>
+							</details>
+						</>
+					)}
+				</article>
+			);
+		})}
+	</div>
+	{page && page.reports.length >= 200 && <p class="muted">Only the first 200 are shown.</p>}
+</Console>
+
+<style>
+	.meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem 0.8rem;
+		align-items: center;
+		margin: -0.25rem 0 0.5rem;
+		font-size: 0.9rem;
+	}
+	.body {
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	.facts {
+		display: grid;
+		grid-template-columns: max-content 1fr;
+		gap: 0.15rem 1rem;
+		margin: 0.5rem 0;
+		font-size: 0.9rem;
+	}
+	.facts dt {
+		color: var(--pico-muted-color);
+	}
+	.facts dd {
+		margin: 0;
+		overflow-wrap: anywhere;
+	}
+	textarea {
+		font-family: var(--pico-font-family-monospace);
+		font-size: 0.85rem;
+	}
+	.panel-foot {
+		margin-bottom: 0;
+	}
+	.panel-foot select {
+		width: auto;
+	}
+</style>

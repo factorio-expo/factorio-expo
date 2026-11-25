@@ -1,0 +1,28 @@
+---
+// Public profile, Collections tab: the user's public collections as cards.
+import CollectionGrid from "@components/collection/CollectionGrid.astro";
+import ProfileLayout from "@components/profile/ProfileLayout.astro";
+import { loadProfile } from "@lib/profile";
+
+const profile = await loadProfile(Astro);
+if (!profile) return Astro.rewrite("/404");
+const { user, owner, api, description } = profile;
+const { collections } = await api.users.collections(user.username);
+---
+
+<ProfileLayout
+	user={user}
+	owner={owner}
+	tab="collections"
+	title={`${user.username}: collections`}
+	description={description}
+>
+	{collections.length === 0 ? (
+		<p>No public collections yet.</p>
+	) : (
+		<CollectionGrid
+			collections={collections}
+			href={(collection) => `/collections/${collection.id}`}
+		/>
+	)}
+</ProfileLayout>

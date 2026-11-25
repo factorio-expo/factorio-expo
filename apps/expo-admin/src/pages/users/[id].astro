@@ -1,0 +1,423 @@
+---
+// One account: what it has, its public profile text, its bans,
+// and the account actions: clear the profile, ban, log out everywhere, delete.
+import RichText from "@factorio-expo/ui/game/RichText.astro";
+import BanForm from "@components/BanForm.astro";
+import BanTable from "@components/BanTable.astro";
+import Outcome from "@components/Outcome.astro";
+import Console from "@layouts/Console.astro";
+import { FormError, handlePost } from "@lib/api/actions";
+import { loadFromApi } from "@lib/api/page";
+import { handleBanPost } from "@lib/bans";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { signInMethods } from "@lib/format";
+import { formText } from "@lib/forms";
+import { siteEntryUrl } from "@lib/site";
+
+const userId = Astro.params.id ?? "";
+
+const posted = await handlePost(Astro, async (api, form) => {
+	const notice = await handleBanPost(api, form);
+	if (notice) return notice;
+	const reason = formText(form, "reason");
+	switch (formText(form, "action")) {
+		case "clear-profile":
+			await api.clearUserProfile(userId, reason);
+			return "Profile cleared: the status line and social links are gone.";
+		case "logout":
+			await api.logoutUser(userId, reason);
+			return "Logged out everywhere: every session of the account has ended.";
+		case "delete": {
+			const user = await api.user(userId);
+			if (formText(form, "confirm_username").toLowerCase() !== user.username.toLowerCase())
+				throw new FormError("Type the username to confirm the delete.");
+			if (!reason) throw new FormError("Give a reason to delete the account.");
+			await api.deleteUser(userId, reason);
+			return `${user.username} is deleted.`;
+		}
+		default:
+			throw new FormError("Unknown action.");
+	}
+});
+if (posted) return posted;
+
+const loaded = await loadFromApi(Astro, (api) => api.user(userId));
+const user = loaded.data;
+const number = new Intl.NumberFormat("en");
+const activeBans = user?.bans.filter((ban) => ban.active) ?? [];
+const endedBans = user?.bans.filter((ban) => !ban.active) ?? [];
+---
+
+<Console
+	title={user?.username ?? "Account"}
+	nav="users"
+	description={
+		user ? `${signInMethods(user)} · joined ${isoDateTime(user.created_at)}` : undefined
+	}
+>
+	<a slot="actions" href="/users">
+		All users
+	</a>
+	<Outcome loadError={loaded.error} />
+	{user && (
+		<div class="stack">
+			{(user.deleted_at || user.ban_actions.length > 0) && (
+				<p class="states">
+					{user.deleted_at && (
+						<span class="pill" data-tone="danger">
+							deleted {isoDateTime(user.deleted_at)}
+						</span>
+					)}
+					{user.ban_actions.length > 0 && (
+						<span class="pill" data-tone="warn">
+							banned from {user.ban_actions.join(", ")}
+						</span>
+					)}
+				</p>
+			)}
+			{user.deleted_at && (
+				<p class="notice">
+					The account no longer works, its sign-in methods are gone and its entries are
+					soft-deleted. The API hard-deletes its entries, row and username a week after
+					the deletion (while an active ban holds it, only the entries). To do it sooner,
+					run the <a href="/cleanups">cleanups</a>: first "Hard-delete deleted entries",
+					then "Hard-delete deleted accounts".
+				</p>
+			)}
+
+			<section class="stats" aria-label="Activity">
+				<div class="stat">
+					<span class="stat-label">Entries</span>
+					<span class="stat-value">{number.format(user.entries)}</span>
+					<span class="stat-sub">{number.format(user.deleted_entries)} deleted</span>
+				</div>
+				<div class="stat">
+					<span class="stat-label">Comments</span>
+					<span class="stat-value">{number.format(user.comments)}</span>
+				</div>
+				<div class="stat">
+					<span class="stat-label">Favorites</span>
+					<span class="stat-value">{number.format(user.favorites)}</span>
+					<span class="stat-sub">{number.format(user.collections)} collections</span>
+				</div>
+				<div class="stat">
+					<span class="stat-label">Reports filed</span>
+					<span class="stat-value">{number.format(user.reports_filed)}</span>
+				</div>
+			</section>
+
+			{!user.deleted_at && (
+				<section class="panel" aria-labelledby="profile-heading">
+					<div class="panel-head">
+						<h2 id="profile-heading">Public profile</h2>
+					</div>
+					{user.status || user.links.length > 0 ? (
+						<>
+							<dl class="facts">
+								<dt>Status</dt>
+								<dd>{user.status || <span class="muted">none</span>}</dd>
+								<dt>Links</dt>
+								<dd>
+									{user.links.length === 0 ? (
+										<span class="muted">none</span>
+									) : (
+										<ul class="links">
+											{user.links.map((link) => (
+												<li>
+													<a
+														href={link.url}
+														target="_blank"
+														rel="noopener noreferrer"
+													>
+														<span
+															class="brand"
+															data-platform={link.platform}
+															aria-hidden="true"
+														/>
+														<span class="visually-hidden">
+															{link.platform}:
+														</span>
+														{link.handle}
+													</a>
+												</li>
+											))}
+										</ul>
+									)}
+								</dd>
+							</dl>
+							<form method="post" class="actions">
+								<input type="hidden" name="action" value="clear-profile" />
+								<input
+									type="text"
+									name="reason"
+									placeholder="Note (optional)"
+									aria-label="Note"
+									maxlength="500"
+								/>
+								<button
+									type="submit"
+									class="secondary"
+									data-confirm={`Clear the status line and social links of ${user.username}?`}
+								>
+									Clear status and links
+								</button>
+							</form>
+						</>
+					) : (
+						<p class="muted">No status line or social links.</p>
+					)}
+				</section>
+			)}
+
+			<section class="panel" aria-labelledby="bans-heading">
+				<div class="panel-head">
+					<h2 id="bans-heading">Bans</h2>
+				</div>
+				{activeBans.length === 0 ? (
+					<p class="muted">No active bans.</p>
+				) : (
+					<BanTable bans={activeBans} showUser={false} />
+				)}
+				{!user.deleted_at && (
+					<details class="more new-ban">
+						<summary>New ban</summary>
+						<BanForm username={user.username} fixed />
+					</details>
+				)}
+				{endedBans.length > 0 && (
+					<details class="more">
+						<summary>{endedBans.length} ended</summary>
+						<BanTable bans={endedBans} showUser={false} />
+					</details>
+				)}
+			</section>
+
+			<section class="panel" aria-labelledby="entries-heading">
+				<div class="panel-head">
+					<h2 id="entries-heading">Entries</h2>
+					{user.recent_entries.length < user.entries + user.deleted_entries && (
+						<span class="muted">the latest {user.recent_entries.length}</span>
+					)}
+				</div>
+				{user.recent_entries.length === 0 ? (
+					<p class="muted">No entries.</p>
+				) : (
+					<div class="table-wrap">
+						<table class="data">
+							<thead>
+								<tr>
+									<th scope="col">Title</th>
+									<th scope="col">Visibility</th>
+									<th scope="col">Uploaded</th>
+								</tr>
+							</thead>
+							<tbody>
+								{user.recent_entries.map((entry) => {
+									const link = entry.deleted ? undefined : siteEntryUrl(entry.id);
+									return (
+										<tr>
+											<td>
+												{link ? (
+													<a
+														href={link}
+														target="_blank"
+														rel="noopener noreferrer"
+													>
+														<RichText
+															text={entry.title}
+															fallback="(untitled)"
+														/>
+													</a>
+												) : (
+													<RichText
+														text={entry.title}
+														fallback="(untitled)"
+													/>
+												)}{" "}
+												<a
+													href={`/entries/${encodeURIComponent(entry.id)}`}
+												>
+													<code>{entry.id}</code>
+												</a>
+											</td>
+											<td>
+												<span class="pill">{entry.visibility}</span>{" "}
+												{entry.quick_preview && (
+													<span class="pill">quick preview</span>
+												)}{" "}
+												{entry.deleted && (
+													<span class="pill" data-tone="danger">
+														deleted
+													</span>
+												)}
+											</td>
+											<td>{isoDateTime(entry.created_at)}</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					</div>
+				)}
+			</section>
+
+			{!user.deleted_at && (
+				<section class="panel" aria-labelledby="account-heading">
+					<div class="panel-head">
+						<h2 id="account-heading">Account</h2>
+					</div>
+					<form method="post" class="actions">
+						<input type="hidden" name="action" value="logout" />
+						<input
+							type="text"
+							name="reason"
+							placeholder="Note (optional)"
+							aria-label="Note"
+							maxlength="500"
+						/>
+						<button
+							type="submit"
+							class="secondary"
+							data-confirm={`End every session of ${user.username}?`}
+						>
+							Log out everywhere
+						</button>
+					</form>
+
+					<div class="danger-zone">
+						<h3>Delete account</h3>
+						<p class="muted">
+							Every session ends and every sign-in method is removed at once (the same
+							provider account can sign up anew); the profile disappears, the{" "}
+							{number.format(user.entries)} entries are soft-deleted, comments become
+							"removed by staff", favorites and collections are removed. Bans stay.
+							Anonymous entries are never affected. A week later the API hard-deletes
+							the account and its entries.
+						</p>
+						<form method="post" class="actions">
+							<input type="hidden" name="action" value="delete" />
+							<input
+								type="text"
+								name="reason"
+								placeholder="Reason (required)"
+								aria-label="Reason"
+								maxlength="500"
+								required
+							/>
+							<input
+								type="text"
+								name="confirm_username"
+								placeholder={`Type ${user.username}`}
+								aria-label="Type the username to confirm"
+								autocomplete="off"
+								required
+							/>
+							<button
+								type="submit"
+								class="danger"
+								data-confirm={`Delete ${user.username}? This cannot be undone.`}
+							>
+								Delete account
+							</button>
+						</form>
+					</div>
+				</section>
+			)}
+		</div>
+	)}
+</Console>
+
+<style>
+	.links {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.links li {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.links a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+	.brand {
+		flex: none;
+		width: 1.1rem;
+		height: 1.1rem;
+		mask: var(--logo) center / contain no-repeat;
+	}
+	/* No inline styles (the console's CSP): the mark and colour per site. */
+	.brand {
+		background-color: var(--brand, currentColor);
+	}
+	.brand[data-platform="youtube"] {
+		--logo: url("/simple-icons/youtube.svg");
+		--brand: #ff0000;
+	}
+	.brand[data-platform="twitch"] {
+		--logo: url("/simple-icons/twitch.svg");
+		--brand: #9146ff;
+	}
+	.brand[data-platform="github"] {
+		--logo: url("/simple-icons/github.svg");
+	}
+	.brand[data-platform="reddit"] {
+		--logo: url("/simple-icons/reddit.svg");
+		--brand: #ff4500;
+	}
+	.brand[data-platform="bluesky"] {
+		--logo: url("/simple-icons/bluesky.svg");
+		--brand: #0285ff;
+	}
+	.brand[data-platform="steam"] {
+		--logo: url("/simple-icons/steam.svg");
+	}
+	.brand[data-platform="x"] {
+		--logo: url("/simple-icons/x.svg");
+	}
+	.states {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin: 0;
+	}
+	.notice {
+		margin: 0;
+	}
+	.new-ban,
+	details.more + details.more {
+		margin-top: 0.9rem;
+	}
+	.new-ban :global(.ban-form) {
+		max-width: 36rem;
+	}
+	.danger-zone {
+		margin-top: 1.25rem;
+		padding: 0.9rem 1rem;
+		border: 1px solid var(--pico-del-color);
+		border-radius: var(--console-radius);
+	}
+	.danger-zone h3 {
+		margin: 0 0 0.3rem;
+		font-size: 1rem;
+		color: var(--pico-del-color);
+	}
+	.danger-zone p {
+		margin: 0 0 0.75rem;
+		font-size: 0.9rem;
+	}
+</style>

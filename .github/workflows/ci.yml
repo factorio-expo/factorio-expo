@@ -1,0 +1,153 @@
+name: Lint, Test and Build Checks
+description: Go and JavaScript formatting, linting, tests and builds on pull requests and master
+
+on:
+  pull_request:
+  # Free on public repos: the full suite on master also saves the caches that
+  # every PR can read.
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The merge commit and its first parent (the base): enough to diff.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Detect changes
+        id: changes
+        run: |
+          files=
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            files=$(git diff --name-only HEAD^1 HEAD)
+          fi
+          echo "$files"
+          match() {
+            if [ "$GITHUB_EVENT_NAME" = push ] || echo "$files" | grep -Eq "$1"; then
+              echo true
+            else
+              echo false
+            fi
+          }
+          self='^\.github/workflows/ci\.yml$'
+          echo "go=$(match "$self|\.go$|^go\.(mod|sum)$|^factorio/|^apps/.*/(migrations|queries)/|^internal/")" >> "$GITHUB_OUTPUT"
+          echo "js=$(match "$self|^(apps/expo-web|apps/expo-admin|packages|e2e)/|^(package\.json|pnpm-.*|\.oxfmtrc\.json|\.oxlintrc\.json)$|^apps/expo-api/openapi/")" >> "$GITHUB_OUTPUT"
+
+      # Go ------------------------------------------------------------------
+      - uses: actions/setup-go@v7
+        if: steps.changes.outputs.go == 'true'
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt
+        if: steps.changes.outputs.go == 'true'
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Not gofmt-formatted:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: go vet
+        if: steps.changes.outputs.go == 'true'
+        run: go vet ./...
+
+      - name: go fix
+        if: steps.changes.outputs.go == 'true'
+        run: |
+          diff=$(go fix -diff ./... 2>&1) || { echo "$diff"; exit 1; }
+          if [ -n "$diff" ]; then
+            echo "go fix would change:"; echo "$diff"; exit 1
+          fi
+
+      - name: go build
+        if: steps.changes.outputs.go == 'true'
+        run: go build ./...
+
+      # The bridge's Lua tests run inside `go test` and skip without `lua`.
+      - name: Install Lua
+        if: steps.changes.outputs.go == 'true'
+        run: |
+          sudo apt-get install -y --no-install-recommends lua5.4
+          lua -v
+
+      # DB-backed tests skip themselves without TEST_DATABASE_URL.
+      - name: go test
+        if: steps.changes.outputs.go == 'true'
+        run: go test ./...
+
+      # JavaScript ----------------------------------------------------------
+      - uses: pnpm/setup@v3
+        if: steps.changes.outputs.js == 'true'
+        with:
+          runtime: node@26
+          cache: true
+          require-lockfile: true
+
+      # expo-game-data generates these (gitignored) from a real Factorio
+      # install; stub them with empty data so lint, tests and the build pass.
+      - name: Stub generated game data
+        if: steps.changes.outputs.js == 'true'
+        working-directory: packages/expo-ui
+        run: |
+          mkdir -p game-icons src/game/data
+          cat > src/game/data/game-icons.generated.ts <<'TS'
+          export const GAME_ICON_SHEETS: Record<string, { columns: number; rows: number }> = {
+          	core: { columns: 1, rows: 1 },
+          };
+          export const GAME_ICON_COORDINATES: Record<string, Record<string, readonly [number, number, string]>> = {
+          	// Tests render [item=iron-ore] as an icon.
+          	item: { "iron-ore": [0, 0, "core"] },
+          };
+          TS
+          cat > src/game/data/icon-picker.data.ts <<'TS'
+          export type IconPickerKind = "icon" | "item" | "fluid" | "entity" | "recipe";
+
+          /** One tab: an item group, with one row of rich-text tokens per subgroup. */
+          export interface IconPickerGroup {
+          	name: string;
+          	rows: string[][];
+          }
+
+          export const iconPicker: Record<IconPickerKind, IconPickerGroup[]> = {
+          	icon: [],
+          	item: [],
+          	// Tests type picked names by this list (admin challenge-imports).
+          	fluid: [{ name: "fluids", rows: [["[fluid=water]", "[fluid=crude-oil]"]] }],
+          	entity: [],
+          	recipe: [],
+          };
+          TS
+
+      - name: oxfmt
+        if: steps.changes.outputs.js == 'true'
+        run: pnpm format:check
+
+      # oxlint is type-aware: it needs the types Astro generates into .astro/
+      # (astro:env/server and friends).
+      - name: Astro sync
+        if: steps.changes.outputs.js == 'true'
+        run: pnpm --filter expo-web --filter expo-admin exec astro sync
+
+      - name: oxlint
+        if: steps.changes.outputs.js == 'true'
+        run: pnpm lint:check
+
+      - name: Unit tests
+        if: steps.changes.outputs.js == 'true'
+        run: pnpm test
+
+      - name: Build web and admin
+        if: steps.changes.outputs.js == 'true'
+        run: pnpm build

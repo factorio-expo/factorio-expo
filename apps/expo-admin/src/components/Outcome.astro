@@ -1,0 +1,28 @@
+---
+// The outcome of the last form post (?notice= / ?error=, see handlePost) and
+// a page load error, at the top of a page.
+export interface Props {
+	/** The page's own load error, if its data could not be read. */
+	loadError?: string | undefined;
+}
+
+const { loadError } = Astro.props;
+const notice = Astro.url.searchParams.get("notice");
+const error = Astro.url.searchParams.get("error");
+---
+
+{notice && (
+	<p class="notice" role="status">
+		{notice}
+	</p>
+)}
+{error && (
+	<p class="error" role="alert">
+		{error}
+	</p>
+)}
+{loadError && (
+	<p class="error" role="alert">
+		{loadError}
+	</p>
+)}

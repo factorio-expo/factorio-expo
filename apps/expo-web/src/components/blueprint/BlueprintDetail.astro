@@ -1,0 +1,134 @@
+---
+import { LIVE_REGIONS } from "@lib/live-regions";
+import { formatToken } from "@factorio-expo/ui/game/icon-token.ts";
+// Body of a leaf blueprint: the hero (preview beside a caller-supplied "aside"
+// panel, EntryInfo with the leaf's size and mods), then export, contents,
+// build cost, analysis and parameters. The preview takes the free width and
+// the panel a fixed column; its frame centres wide and tall renders alike, so
+// one layout fits every blueprint: side by side when there is room, stacked
+// on narrow screens.
+import type { LeafDetail } from "@lib/api";
+import { compareQuality } from "@factorio-expo/ui/game/qualities.ts";
+import { thirdPartyMods } from "@lib/mods";
+import BlueprintExport from "./BlueprintExport.astro";
+import BlueprintParameters from "./BlueprintParameters.astro";
+import BlueprintPreview from "./BlueprintPreview.astro";
+import BlueprintSchedules from "./BlueprintSchedules.astro";
+import BuildCost from "./BuildCost.astro";
+import ChipSection from "./ChipSection.astro";
+import PlatformStats from "./PlatformStats.astro";
+import ProductionAnalysis from "./production/ProductionAnalysis.astro";
+import SimilarBlueprints from "./SimilarBlueprints.astro";
+
+interface Props {
+	leaf: LeafDetail;
+	/** The entry the leaf belongs to; its progress stream keeps the page live. */
+	entryId: string;
+	/** API path of the raw string to link; omitted for private entries. */
+	rawPath?: string;
+}
+
+const { leaf, entryId, rawPath } = Astro.props;
+const entities = (leaf.entities ?? [])
+	.toSorted((a, b) => b.count - a.count)
+	.map((entity) => ({
+		iconToken: formatToken({ type: "entity", name: entity.name, quality: entity.quality }),
+		label: entity.name,
+		count: entity.count,
+	}));
+const recipes = (leaf.recipes ?? [])
+	.toSorted(
+		(a, b) =>
+			b.count - a.count ||
+			a.name.localeCompare(b.name) ||
+			compareQuality(a.quality, b.quality),
+	)
+	.map((recipe) => ({
+		iconToken: formatToken({ type: "recipe", name: recipe.name, quality: recipe.quality }),
+		label: recipe.name,
+		count: recipe.count,
+	}));
+---
+
+<div
+	class="detail"
+	data-live-leaf
+	data-entry-id={entryId}
+	data-blueprint-id={leaf.id}
+	data-preview-status={leaf.preview_status}
+	data-analysis-status={leaf.production.availability}
+>
+	<div class="hero">
+		<div class="live-region" data-live-region={LIVE_REGIONS.preview}>
+			<BlueprintPreview leaf={leaf} entryId={entryId} />
+		</div>
+		<div class="hero-aside">
+			<slot name="aside" />
+		</div>
+	</div>
+	<BlueprintExport
+		exchangeString={leaf.exchange_string}
+		rawPath={rawPath}
+		nodeId={leaf.id}
+		editorMissingMods={thirdPartyMods(leaf.mods)}
+	/>
+	<div class="contents">
+		<ChipSection title="Entities" emptyText="No entities." items={entities} />
+		<ChipSection title="Recipes" emptyText="No recipes." items={recipes} />
+	</div>
+	<div class="live-region" data-live-region={LIVE_REGIONS.buildCost}>
+		<BuildCost cost={leaf.production.build_cost} />
+	</div>
+	<div class="live-region" data-live-region={LIVE_REGIONS.analysis}>
+		<PlatformStats platform={leaf.production.space_platform} />
+		<BlueprintSchedules
+			schedules={leaf.schedules}
+			platform={leaf.production.space_platform?.is_space_platform === true}
+		/>
+		<ProductionAnalysis production={leaf.production} />
+	</div>
+	<BlueprintParameters parameters={leaf.parameters} />
+	<SimilarBlueprints leafId={leaf.id} analysed={leaf.production.availability === "ready"} />
+</div>
+
+<script>
+	import "./live-leaf.ts";
+</script>
+
+<style>
+	/* Swap targets only (lib/live-regions.ts); they take no part in layout. */
+	.live-region {
+		display: contents;
+	}
+
+	/* Added by live-leaf.ts when the entry goes away under the page. */
+	.detail :global(.live-gone) {
+		padding: 0.75rem 1rem;
+		border-left: 4px solid var(--pico-del-color);
+		background: var(--pico-card-sectioning-background-color);
+	}
+
+	.hero {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+		gap: 1.5rem;
+		align-items: stretch;
+		margin-bottom: 1.5rem;
+	}
+
+	.hero-aside {
+		min-width: 0;
+	}
+
+	@media (max-width: 56rem) {
+		.hero {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+
+	.contents {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+		gap: 0.75rem 1.5rem;
+	}
+</style>

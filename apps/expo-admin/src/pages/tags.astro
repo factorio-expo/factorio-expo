@@ -1,0 +1,448 @@
+---
+// Tags: the curated tag groups and tags with their suggestion rules. Names,
+// groups and order change freely; slugs are fixed once made (search
+// documents and links hold them). Deleting a tag takes it off every entry.
+// Suggestion rules apply once expo-api restarts.
+import Outcome from "@components/Outcome.astro";
+import Console from "@layouts/Console.astro";
+import { FormError, handlePost } from "@lib/api/actions";
+import { loadFromApi } from "@lib/api/page";
+import type { StaffTag, StaffTagRule } from "@lib/api/types";
+import { formInt, formText } from "@lib/forms";
+
+const MAX_POSITION = 10_000;
+const MAX_COUNT = 1_000_000;
+
+const posted = await handlePost(Astro, async (api, form) => {
+	const position = () => {
+		const value = formInt(form, "position", 0, MAX_POSITION);
+		if (value === undefined) throw new FormError(`The position is 0 to ${MAX_POSITION}.`);
+		return value;
+	};
+	const fields = () => ({ display_name: formText(form, "display_name"), position: position() });
+	switch (formText(form, "action")) {
+		case "create-group":
+			await api.createTagGroup({ ...fields(), slug: formText(form, "slug") });
+			return "Group added. It shows on the site once it has a tag.";
+		case "update-group":
+			await api.updateTagGroup(formText(form, "group_id"), fields());
+			return "Group saved.";
+		case "delete-group":
+			await api.deleteTagGroup(formText(form, "group_id"));
+			return "Group deleted.";
+		case "create-tag":
+			await api.createTag({
+				...fields(),
+				icon: formText(form, "icon"),
+				slug: formText(form, "slug"),
+				group_id: formText(form, "group_id"),
+			});
+			return "Tag added.";
+		case "update-tag":
+			await api.updateTag(formText(form, "tag_id"), {
+				...fields(),
+				icon: formText(form, "icon"),
+				group_id: formText(form, "group_id"),
+			});
+			return "Tag saved.";
+		case "delete-tag":
+			await api.deleteTag(formText(form, "tag_id"));
+			return "Tag deleted; its entries are queued for search.";
+		case "set-rule": {
+			const kind = formText(form, "kind");
+			if (kind !== "entity" && kind !== "recipe" && kind !== "quality")
+				throw new FormError("Pick entity, recipe or quality.");
+			const min = formInt(form, "min_count", 1, MAX_COUNT);
+			const points = formInt(form, "points", 1, 100);
+			if (min === undefined || points === undefined)
+				throw new FormError("Give a minimum count and points.");
+			const maxRaw = formText(form, "max_count");
+			const max = maxRaw ? formInt(form, "max_count", min, MAX_COUNT) : null;
+			if (max === undefined) throw new FormError("The maximum is at least the minimum.");
+			const rule: StaffTagRule = {
+				kind,
+				name: formText(form, "name"),
+				min_count: min,
+				max_count: max,
+				points,
+			};
+			await api.setTagRule(formText(form, "tag_id"), rule);
+			return "Rule saved. It applies once expo-api restarts.";
+		}
+		case "delete-rule":
+			await api.deleteTagRule(
+				formText(form, "tag_id"),
+				formText(form, "kind"),
+				formText(form, "name"),
+			);
+			return "Rule deleted. It stops applying once expo-api restarts.";
+		default:
+			throw new FormError("Unknown action.");
+	}
+});
+if (posted) return posted;
+
+const loaded = await loadFromApi(Astro, (api) => api.tags());
+const page = loaded.data;
+const number = new Intl.NumberFormat("en");
+const tagsOf = (groupId: string): StaffTag[] =>
+	page?.tags.filter((tag) => tag.group_id === groupId) ?? [];
+const ruleText = (rule: StaffTagRule) => {
+	const range =
+		rule.max_count === null
+			? `${rule.min_count}+`
+			: rule.max_count === rule.min_count
+				? `${rule.min_count}`
+				: `${rule.min_count} to ${rule.max_count}`;
+	return `${range} ${rule.name}, ${rule.points} point${rule.points === 1 ? "" : "s"}`;
+};
+---
+
+<Console
+	title="Tags"
+	nav="tags"
+	description="The curated tags and their suggestion rules. Slugs are fixed once made."
+>
+	<Outcome loadError={loaded.error} />
+	<p class="muted">
+		Names, groups and order apply at once. Suggestion rules apply once expo-api restarts.
+	</p>
+
+	{page && (
+		<>
+			<section class="panel" aria-labelledby="new-group">
+				<div class="panel-head">
+					<h2 id="new-group">New group</h2>
+				</div>
+				<form method="post" class="actions">
+					<input type="hidden" name="action" value="create-group" />
+					<input
+						type="text"
+						name="slug"
+						placeholder="slug"
+						aria-label="Slug"
+						required
+						maxlength="40"
+					/>
+					<input
+						type="text"
+						name="display_name"
+						placeholder="Name"
+						aria-label="Name"
+						required
+						maxlength="40"
+					/>
+					<input
+						type="number"
+						name="position"
+						min="0"
+						max={MAX_POSITION}
+						value={page.groups.length + 1}
+						aria-label="Position"
+						class="narrow"
+					/>
+					<button type="submit">Add group</button>
+				</form>
+			</section>
+
+			{page.groups.map((group) => {
+				const tags = tagsOf(group.id);
+				return (
+					<section class="panel" aria-labelledby={`group-${group.id}`}>
+						<div class="panel-head">
+							<h2 id={`group-${group.id}`}>
+								{group.display_name} <code class="muted">{group.slug}</code>
+								<span class="count">{number.format(group.tags)}</span>
+							</h2>
+						</div>
+						<form method="post" class="actions">
+							<input type="hidden" name="group_id" value={group.id} />
+							<input
+								type="text"
+								name="display_name"
+								value={group.display_name}
+								aria-label="Group name"
+								required
+								maxlength="40"
+							/>
+							<input
+								type="number"
+								name="position"
+								min="0"
+								max={MAX_POSITION}
+								value={group.position}
+								aria-label="Group position"
+								class="narrow"
+							/>
+							<button
+								type="submit"
+								name="action"
+								value="update-group"
+								class="secondary"
+							>
+								Save group
+							</button>
+							{group.tags === 0 && (
+								<button
+									type="submit"
+									name="action"
+									value="delete-group"
+									class="danger"
+									data-confirm={`Delete the empty group ${group.display_name}?`}
+								>
+									Delete group
+								</button>
+							)}
+						</form>
+
+						<ul class="tags">
+							{tags.map((tag) => (
+								<li>
+									<form method="post" class="actions tag-row">
+										<input type="hidden" name="tag_id" value={tag.id} />
+										<code class="slug">{tag.slug}</code>
+										<input
+											type="text"
+											name="display_name"
+											value={tag.display_name}
+											aria-label={`Name of ${tag.slug}`}
+											required
+											maxlength="40"
+										/>
+										<input
+											type="text"
+											name="icon"
+											value={tag.icon}
+											placeholder="[item=…]"
+											aria-label={`Icon of ${tag.slug}`}
+											maxlength="80"
+											class="icon-field"
+										/>
+										<select name="group_id" aria-label={`Group of ${tag.slug}`}>
+											{page.groups.map((option) => (
+												<option
+													value={option.id}
+													selected={option.id === tag.group_id}
+												>
+													{option.display_name}
+												</option>
+											))}
+										</select>
+										<input
+											type="number"
+											name="position"
+											min="0"
+											max={MAX_POSITION}
+											value={tag.position}
+											aria-label={`Position of ${tag.slug}`}
+											class="narrow"
+										/>
+										<span class="muted small">
+											{number.format(tag.entries)} entries
+										</span>
+										<button
+											type="submit"
+											name="action"
+											value="update-tag"
+											class="secondary"
+										>
+											Save
+										</button>
+										<button
+											type="submit"
+											name="action"
+											value="delete-tag"
+											class="danger"
+											data-confirm={`Delete ${tag.display_name}? It comes off ${tag.entries} entries.`}
+										>
+											Delete
+										</button>
+									</form>
+									<details class="more rules">
+										<summary>Suggestion rules ({tag.rules.length})</summary>
+										{tag.rules.length > 0 && (
+											<ul>
+												{tag.rules.map((rule) => (
+													<li>
+														<form method="post" class="rule">
+															<input
+																type="hidden"
+																name="tag_id"
+																value={tag.id}
+															/>
+															<input
+																type="hidden"
+																name="kind"
+																value={rule.kind}
+															/>
+															<input
+																type="hidden"
+																name="name"
+																value={rule.name}
+															/>
+															<span class="pill">{rule.kind}</span>{" "}
+															{ruleText(rule)}
+															<button
+																type="submit"
+																name="action"
+																value="delete-rule"
+																class="secondary small-button"
+															>
+																Remove
+															</button>
+														</form>
+													</li>
+												))}
+											</ul>
+										)}
+										<form method="post" class="actions">
+											<input type="hidden" name="action" value="set-rule" />
+											<input type="hidden" name="tag_id" value={tag.id} />
+											<select name="kind" aria-label="Kind">
+												<option value="entity">entity</option>
+												<option value="recipe">recipe</option>
+												<option value="quality">quality</option>
+											</select>
+											<input
+												type="text"
+												name="name"
+												placeholder="prototype name"
+												aria-label="Prototype name"
+												required
+												maxlength="100"
+											/>
+											<input
+												type="number"
+												name="min_count"
+												min="1"
+												max={MAX_COUNT}
+												value="1"
+												aria-label="Minimum count"
+												class="narrow"
+											/>
+											<input
+												type="number"
+												name="max_count"
+												min="1"
+												max={MAX_COUNT}
+												placeholder="max"
+												aria-label="Maximum count (empty: none)"
+												class="narrow"
+											/>
+											<input
+												type="number"
+												name="points"
+												min="1"
+												max="100"
+												value="1"
+												aria-label="Points"
+												class="narrow"
+											/>
+											<button type="submit" class="secondary">
+												Add or change rule
+											</button>
+										</form>
+									</details>
+								</li>
+							))}
+						</ul>
+
+						<form method="post" class="actions new-tag">
+							<input type="hidden" name="action" value="create-tag" />
+							<input type="hidden" name="group_id" value={group.id} />
+							<input
+								type="text"
+								name="slug"
+								placeholder="new-tag-slug"
+								aria-label="New tag slug"
+								required
+								maxlength="40"
+							/>
+							<input
+								type="text"
+								name="display_name"
+								placeholder="Name"
+								aria-label="New tag name"
+								required
+								maxlength="40"
+							/>
+							<input
+								type="text"
+								name="icon"
+								placeholder="[item=…] icon"
+								aria-label="New tag icon"
+								maxlength="80"
+								class="icon-field"
+							/>
+							<input
+								type="number"
+								name="position"
+								min="0"
+								max={MAX_POSITION}
+								value={tags.length + 1}
+								aria-label="New tag position"
+								class="narrow"
+							/>
+							<button type="submit" class="secondary">
+								Add tag
+							</button>
+						</form>
+					</section>
+				);
+			})}
+		</>
+	)}
+</Console>
+
+<style>
+	.icon-field {
+		width: 12rem !important;
+	}
+	.narrow {
+		width: 6rem !important;
+	}
+	.tags {
+		margin: 0.5rem 0;
+		padding: 0;
+	}
+	.tags > li {
+		list-style: none;
+		padding-block: 0.4rem;
+		border-top: var(--console-border);
+	}
+	.tag-row {
+		align-items: center;
+		margin: 0;
+	}
+	.tag-row select {
+		width: auto;
+	}
+	.slug {
+		min-width: 11rem;
+	}
+	.small {
+		font-size: 0.85rem;
+		white-space: nowrap;
+	}
+	.rules ul {
+		margin: 0.3rem 0;
+		padding: 0;
+	}
+	.rules li {
+		list-style: none;
+	}
+	.rule {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0.15rem 0;
+	}
+	.small-button {
+		margin: 0;
+		padding: 0.1rem 0.5rem;
+		font-size: 0.8rem;
+	}
+	.new-tag {
+		margin-bottom: 0;
+	}
+</style>

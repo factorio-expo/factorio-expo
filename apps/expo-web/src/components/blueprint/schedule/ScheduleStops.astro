@@ -1,0 +1,103 @@
+---
+// Stops in order, each with its wait conditions right under it (no
+// expanding: a schedule is read stop by stop). On a space platform the stop
+// is a planet / space location, shown with its icon.
+import type { ScheduleStop } from "@lib/api";
+import GameIcon from "@factorio-expo/ui/game/GameIcon.astro";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { gameIcon } from "@factorio-expo/ui/game/game-icons.ts";
+import ConditionList from "./ConditionList.astro";
+import "./schedule-tree.css";
+
+interface Props {
+	stops?: ScheduleStop[];
+	platform?: boolean;
+}
+
+const { stops = [], platform = false } = Astro.props;
+const locationType = (name: string) => (gameIcon("planet", name) ? "planet" : "space-location");
+---
+
+<ol class="stops">
+	{stops.map((stop) => (
+		<li>
+			<div class="station">
+				<span class="number" aria-hidden="true" />
+				{platform && stop.station && (
+					<GameIcon
+						prototypeType={locationType(stop.station)}
+						name={stop.station}
+						decorative
+					/>
+				)}
+				{stop.station ? (
+					<span class="name" set:html={formatRichText(stop.station)} />
+				) : (
+					<em class="name">{stop.temporary ? "Temporary stop" : "Unnamed stop"}</em>
+				)}
+				{stop.temporary && stop.station && <small class="st-tag">temporary</small>}
+				{platform && stop.allows_unloading === false && (
+					<small class="st-tag">no unloading</small>
+				)}
+			</div>
+			<div class="wait">
+				<ConditionList conditions={stop.wait_conditions} />
+			</div>
+		</li>
+	))}
+</ol>
+
+<style>
+	.stops {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		counter-reset: stop;
+	}
+
+	.stops > li {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		counter-increment: stop;
+	}
+
+	/* The stop as a bar, as in game: its number, then the station. */
+	.station {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+		min-width: 0;
+		padding: 0.3rem 0.6rem;
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-muted-border-color);
+		font-weight: 600;
+	}
+
+	.number::before {
+		content: counter(stop);
+		display: grid;
+		place-items: center;
+		min-width: 1.4rem;
+		height: 1.4rem;
+		padding: 0 0.3rem;
+		border-radius: 0.25rem;
+		background: var(--pico-background-color);
+		font-size: 0.75rem;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.name {
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+
+	/* The wait conditions, indented under their stop. */
+	.wait {
+		margin: 0.35rem 0 0 1rem;
+	}
+</style>

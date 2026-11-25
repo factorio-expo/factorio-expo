@@ -1,0 +1,145 @@
+@use "@picocss/pico/scss/pico" with (
+	$theme-color: "pumpkin",
+	$enable-semantic-container: true,
+	$enable-classes: true,
+	$enable-responsive-typography: false,
+	$modules: (
+		// Theme
+		"themes/default": true,
+
+		// Layout
+		"layout/document": true,
+		"layout/landmarks": true,
+		"layout/container": true,
+		"layout/section": true,
+		"layout/grid": true,
+		"layout/overflow-auto": true,
+
+		// Content
+		"content/link": true,
+		"content/typography": true,
+		"content/embedded": false,
+		"content/button": true,
+		"content/table": false,
+		"content/code": false,
+		"content/figure": true,
+		"content/misc": true,
+
+		// Forms
+		"forms/basics": true,
+		"forms/checkbox-radio-switch": false,
+		"forms/input-color": false,
+		"forms/input-date": false,
+		"forms/input-file": false,
+		"forms/input-range": false,
+		"forms/input-search": true,
+
+		// Components
+		"components/accordion": false,
+		"components/card": true,
+		"components/dropdown": true,
+		"components/group": true,
+		"components/loading": true,
+		"components/modal": true,
+		"components/nav": true,
+		"components/progress": false,
+		"components/tooltip": true,
+
+		// Utilities
+		"utilities/accessibility": true,
+		"utilities/reduce-motion": true,
+	)
+);
+@use "@factorio-expo/ui/styles/icon-button.scss";
+@use "@factorio-expo/ui/styles/tooltip.scss";
+
+/* Hidden header tooltips (centred under the right-most icon buttons) otherwise stretch
+   the page past the viewport on phones, leaving a blank strip on the right. */
+html {
+	overflow-x: clip;
+}
+
+/* Reserve the scrollbar space on desktop only, so the layout doesn't shift between short
+   and long pages; on narrow screens it would leave a blank strip on the right. */
+@media (min-width: 48rem) {
+	html {
+		scrollbar-gutter: stable;
+	}
+}
+
+/* Session-dependent UI. `data-auth` is rendered on <html> by the server
+   (layouts/Page.astro); theme-init.js sets it from the stored hint only when
+   the server could not tell. Nothing here waits for scripts. */
+html:not([data-auth]) [data-auth-only],
+html[data-auth] [data-guest-only] {
+	display: none !important;
+}
+
+/* Reserves the space of content that is still loading. */
+[data-pending] {
+	visibility: hidden;
+}
+
+textarea.mono {
+	font-family: var(--pico-font-family-monospace);
+}
+
+/* A button that reads as a link (opens a dialog rather than a page). */
+button.link-button {
+	display: inline;
+	width: auto;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--pico-primary);
+	font: inherit;
+	text-decoration: underline;
+	text-decoration-color: var(--pico-primary-underline);
+	text-underline-offset: 0.125em;
+	cursor: pointer;
+
+	&:is(:hover, :focus-visible) {
+		color: var(--pico-primary-hover);
+		text-decoration-color: var(--pico-primary-hover-underline);
+	}
+}
+
+/* Copy buttons (lib/copy-button.ts): only the current state's icon shows, and
+   the Pico tooltip stays open while the copy result is shown. */
+[data-copy-icon][aria-hidden="true"] {
+	display: none;
+}
+
+[data-tooltip][data-tip-open]::before,
+[data-tooltip][data-tip-open]::after {
+	opacity: 1;
+}
+
+/* A textarea a file is being dragged over (lib/file-drop.ts). */
+textarea[data-dropping] {
+	outline: 2px dashed var(--pico-primary);
+	outline-offset: 2px;
+}
+
+/* Drag handles that carry an exchange string (lib/drag-string.ts). */
+[data-drag-string] {
+	cursor: grab;
+}
+
+/* Read by screen readers and search engines, not shown. */
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+/* A link-styled button with nothing to go to (a paused action, lib/site-pause.ts):
+   grayed like Pico's [disabled] buttons, but still hoverable for its tooltip. */
+a[role="button"][aria-disabled="true"] {
+	opacity: 0.5;
+	cursor: not-allowed;
+}

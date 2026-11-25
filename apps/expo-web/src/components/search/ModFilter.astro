@@ -1,0 +1,51 @@
+---
+// Mod filter: blueprints that need nothing beyond the base game, Space Age
+// content (space-age, quality, recycler, elevated-rails), or a listed
+// modset. Several choices match any of them; none means any mods.
+import MultiSelect from "@components/form/MultiSelect.astro";
+import type { Modset } from "@lib/api";
+import { MOD_FILTER_OPTIONS } from "@lib/search/query";
+
+interface Props {
+	modsets: Modset[];
+	selected: string[];
+	error: string | null;
+	/** Matches per mods filter value, counted without the mods filter; absent without results. */
+	counts?: Record<string, number>;
+}
+
+const { modsets, selected, error, counts } = Astro.props;
+const count = (value: string) => (counts ? (counts[value] ?? 0) : undefined);
+const options = [
+	...MOD_FILTER_OPTIONS.map((option) =>
+		Object.assign({}, option, { group: "Game", count: count(option.value) }),
+	),
+	...modsets.map((modset) => ({
+		value: modset.name,
+		label: modset.title,
+		group: "Mods",
+		count: count(modset.name),
+	})),
+];
+---
+
+<div class="mod-filter">
+	<MultiSelect
+		id="search-mods"
+		name="mods"
+		label="Mods"
+		placeholder="Any mods"
+		options={options}
+		selected={selected}
+		searchable
+	/>
+	{error && <small role="status">Mod options unavailable: {error}</small>}
+</div>
+
+<style>
+	/* The grid resets its direct children's margins (AdvancedSearch); the
+	   picker sits one level down here, beside the tag picker that does not. */
+	.mod-filter :global(.multiselect) {
+		margin: 0;
+	}
+</style>

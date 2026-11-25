@@ -1,0 +1,190 @@
+---
+// Entry view (docs/frontend.md #3): renders entry metadata plus the recursive
+// book tree or a single blueprint's detail inline.
+import { assetUrl } from "@lib/api/public-asset";
+import CommentThread from "@components/entry/comments/CommentThread.astro";
+import EditLinkBanner from "@components/entry/EditLinkBanner.astro";
+import EntryContent from "@components/entry/EntryContent.astro";
+import EntryInfo from "@components/entry/EntryInfo.astro";
+import EntryMetadata from "@components/entry/metadata/EntryMetadata.astro";
+import PublishPanel from "@components/entry/PublishPanel.astro";
+import SpoilerGate from "@components/entry/SpoilerGate.astro";
+import type { TagGroup } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server.ts";
+import { loadEntryAccess, unlessMissing } from "@lib/entry-access";
+import { entryView } from "@lib/entry-view";
+import { isPlannerKind, nodeKindLabel } from "@lib/planners";
+import { tagRefs } from "@lib/tags";
+import { allowGuestTurnstile } from "@lib/turnstile";
+import { getViewer } from "@lib/viewer";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { coverPreview, creativeWorkJsonLd, metaDescription } from "@utils/meta.ts";
+import { toPublicAssetUrl } from "@lib/api/asset-url";
+import { PUBLIC_API_BASE_URL, PUBLIC_TURNSTILE_SITE_KEY } from "astro:env/client";
+import Page from "@layouts/Page.astro";
+
+const { publicId } = Astro.params;
+const api = getServerApiClient(Astro);
+const access = await loadEntryAccess(api, publicId!);
+if (!access) return Astro.rewrite("/404");
+const { entry, creator, canEdit, claimable } = access;
+
+const currentRevisionId = entry.revision?.id;
+const selectedRevisionId = Astro.url.searchParams.get("revision");
+if (selectedRevisionId) {
+	const selected = await unlessMissing(api.entries.getRevision(publicId!, selectedRevisionId));
+	if (!selected) return Astro.rewrite("/404");
+	entry.revision = selected;
+}
+const root = entry.revision?.root;
+// A quick preview is read-only until published (entry-access.ts: canEdit is
+// false): no edit form, revisions, delete, favorites or collections; its
+// panel offers publishing instead. An anonymous entry's edit-link holders get
+// the same panel to claim it.
+const isPreview = entry.quick_preview === true;
+// The thread page the URL asks for; quick previews take no comments.
+const commentParam = (name: string) => {
+	const value = Number(Astro.url.searchParams.get(name));
+	return Number.isInteger(value) && value > 0 ? value : undefined;
+};
+// Everything else the page needs is independent: asked together, not one
+// call after another.
+const [leafDetail, bookExchangeString, tagGroups, viewer, comments] = await Promise.all([
+	root?.kind === "blueprint"
+		? unlessMissing(api.entries.getLeafDetail(publicId!, root.id))
+		: undefined,
+	root?.kind === "book" && entry.revision
+		? api.entries
+				.exportRevision(publicId!, entry.revision.id)
+				.then((exported) => exported.exchange_string as string | undefined)
+				// The export is a convenience; the tree still renders without it.
+				.catch((err) => {
+					console.error("book export failed", err);
+					return undefined;
+				})
+		: undefined,
+	// Tag names are cosmetic: the entry still renders with slugs if the list fails.
+	api.tags
+		.list()
+		.then((response) => response.groups)
+		.catch((): TagGroup[] => []),
+	getViewer(Astro),
+	isPreview
+		? null
+		: api.comments
+				.list(publicId!, {
+					after: commentParam("comments_after"),
+					before: commentParam("comments_before"),
+				})
+				// The thread is secondary: the entry still renders without it.
+				.catch((err) => {
+					console.error("comments failed", err);
+					return null;
+				}),
+]);
+let leaf: Awaited<ReturnType<typeof api.entries.getLeafDetail>> | null = null;
+if (root?.kind === "blueprint") {
+	leaf = leafDetail ?? null;
+	if (!leaf) return Astro.rewrite("/404");
+}
+const entryTags = tagRefs(tagGroups, entry.tags);
+const signedIn = viewer.state === "in";
+// The report dialog (signed-out visitors who cannot edit it) passes Turnstile.
+if (!canEdit && !isPreview) allowGuestTurnstile(Astro.csp, PUBLIC_TURNSTILE_SITE_KEY, signedIn);
+// Only public entries are meant to be found; unlisted ones travel by link.
+const view = entryView(entry, access);
+const hidden = !view.indexable;
+if (hidden) {
+	Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow");
+}
+
+const pageTitle = stripRichText(entry.title || root?.label || "") || "Blueprint entry";
+const kindLabel = nodeKindLabel(root?.kind ?? "blueprint").toLowerCase();
+const gameVersion = entry.revision?.game_version;
+const description = metaDescription(
+	entry.description,
+	`A Factorio ${kindLabel}${gameVersion ? ` for version ${gameVersion}` : ""}${entry.owner_username ? ` by ${entry.owner_username}` : ""}${root && isPlannerKind(root.kind) ? "." : ", with preview and production analysis."}`,
+);
+// The card's cover: a book's first rendered blueprint; none for a spoiler,
+// whose previews stay hidden until a click.
+const cover = !view.showShareImage ? undefined : (leaf?.preview ?? coverPreview(root));
+const image = cover ? assetUrl(cover.thumbnail_url) : undefined;
+const structuredData = hidden
+	? undefined
+	: creativeWorkJsonLd({
+			site: Astro.site ?? Astro.url,
+			path: `/e/${entry.id}`,
+			name: pageTitle,
+			description,
+			entry,
+			image,
+			keywords: entryTags.map((tag) => tag.name),
+			viewCount: entry.view_count,
+			isPartOf: { type: "WebSite", name: "Factorio Expo", path: "/" },
+		});
+---
+
+<Page
+	title={pageTitle}
+	description={description}
+	image={image}
+	type="article"
+	noindex={hidden}
+	canonicalPath={`/e/${entry.id}`}
+>
+	{structuredData && (
+		<script slot="head" type="application/ld+json" is:inline set:html={structuredData} />
+	)}
+	<EditLinkBanner entryId={entry.id} preview={isPreview} />
+	{(isPreview || claimable) && (
+		<PublishPanel
+			entry={entry}
+			leaf={leaf}
+			canEdit={creator}
+			signedIn={signedIn}
+			tagGroups={tagGroups}
+			commentCount={comments?.total}
+		/>
+	)}
+	<EntryMetadata
+		entry={entry}
+		tags={entryTags}
+		tagGroups={tagGroups}
+		canEdit={canEdit}
+		commentCount={comments?.total}
+	/>
+	<SpoilerGate spoiler={entry.spoiler}>
+		<EntryContent
+			root={root}
+			leaf={leaf}
+			bookExchangeString={bookExchangeString}
+			entryId={publicId!}
+			revisionId={entry.revision?.id}
+			liveRevisionId={currentRevisionId}
+			rawLink={view.shareable}
+			entryTitle={entry.title}
+			entryDescription={entry.description}
+		>
+			<EntryInfo
+				slot="info"
+				entry={entry}
+				currentRevisionId={currentRevisionId}
+				canEdit={canEdit}
+				collectable={!isPreview}
+				leaf={leaf ?? undefined}
+				copyable={
+					root !== undefined &&
+					(leaf !== null || bookExchangeString !== undefined || isPlannerKind(root.kind))
+				}
+			/>
+		</EntryContent>
+	</SpoilerGate>
+	{comments && (
+		<CommentThread
+			entryId={entry.id}
+			page={comments}
+			signedIn={signedIn}
+			revisionId={entry.revision?.id}
+		/>
+	)}
+</Page>

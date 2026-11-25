@@ -1,0 +1,51 @@
+---
+import MultiSelect from "@components/form/MultiSelect.astro";
+import type { TagGroup } from "@lib/api";
+
+interface Props {
+	tagGroups: TagGroup[];
+	selected: string[];
+	error: string | null;
+	/** Matches per tag slug, counted without the tags filter; absent without results. */
+	counts?: Record<string, number>;
+}
+
+const { tagGroups, selected, error, counts } = Astro.props;
+const options = tagGroups.flatMap((group) =>
+	group.tags.map((tag) => ({
+		value: tag.slug,
+		label: tag.display_name,
+		icon: tag.icon,
+		group: group.display_name,
+		count: counts ? (counts[tag.slug] ?? 0) : undefined,
+	})),
+);
+---
+
+{options.length > 0 ? (
+	<MultiSelect
+		id="search-tags"
+		name="tags"
+		label="Tags"
+		placeholder="Any tag"
+		options={options}
+		selected={selected}
+		searchable
+	/>
+) : (
+	<div>
+		<label for="search-tags">Tags</label>
+		<select
+			id="search-tags"
+			name="tags"
+			multiple
+			disabled
+			aria-describedby="tag-options-status"
+		></select>
+		{error && (
+			<small id="tag-options-status" role="status">
+				Tag options unavailable: {error}
+			</small>
+		)}
+	</div>
+)}

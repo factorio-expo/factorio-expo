@@ -1,0 +1,31 @@
+{
+	"name": "@factorio-expo/ui",
+	"version": "0.0.1",
+	"private": true,
+	"description": "Code shared by expo-web and expo-admin, by domain: api/ (problem+json errors, ok), game/ (icons, icon picker, rich text), forms/ (filter rows, Markdown editor), styles/, utils/.",
+	"type": "module",
+	"exports": {
+		"./*": "./src/*"
+	},
+	"scripts": {
+		"lint": "oxlint --fix",
+		"lint:check": "oxlint",
+		"format": "oxfmt --write .",
+		"format:check": "oxfmt --check",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@lucide/svelte": "catalog:",
+		"markdown-text-editor": "^1.9.5",
+		"temporal-polyfill": "catalog:"
+	},
+	"devDependencies": {
+		"astro": "catalog:",
+		"svelte": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	},
+	"engines": {
+		"node": ">=26"
+	}
+}

@@ -1,0 +1,248 @@
+---
+// The challenge editor: basics (with icon pickers and the Markdown editor),
+// dates (UTC), environment, goal and restrictions (ChallengeRules island) and
+// options. Read back by lib/challenge-form.ts.
+import IconPicker from "@factorio-expo/ui/game/icon-picker/IconPicker.astro";
+import MarkdownEditor from "@factorio-expo/ui/forms/markdown-editor/MarkdownEditor.astro";
+import type { ChallengeFields, ChallengeParam } from "@lib/api/types";
+import { toEditorTime } from "@lib/challenge-form";
+import ChallengeImports from "./ChallengeImports.svelte";
+import ChallengeRules from "./ChallengeRules.svelte";
+import DateTimeField from "./DateTimeField.astro";
+
+interface Props {
+	values: Omit<ChallengeFields, "confirm_rescore">;
+	params: ChallengeParam[];
+	/** The challenge has started: rule changes need the rescore confirmed. */
+	started: boolean;
+	submitLabel: string;
+}
+const { values, params, started, submitLabel } = Astro.props;
+const rules = values.rules;
+---
+
+<form method="post" class="challenge-editor">
+	<input type="hidden" name="action" value="save" />
+
+	<section class="panel">
+		<div class="panel-head">
+			<h2>Basics</h2>
+		</div>
+		<label>
+			Slug (the challenge's URL: /challenges/slug)
+			<input
+				type="text"
+				name="slug"
+				required
+				maxlength="80"
+				pattern="[a-z0-9]+(-[a-z0-9]+)*"
+				value={values.slug}
+				placeholder="rare-circuits"
+			/>
+		</label>
+		<IconPicker targetId="challenge-title">
+			<label slot="label" for="challenge-title">
+				Title
+			</label>
+			<input
+				id="challenge-title"
+				type="text"
+				name="title"
+				required
+				maxlength="120"
+				value={values.title}
+			/>
+		</IconPicker>
+		<IconPicker targetId="challenge-icons">
+			<label slot="label" for="challenge-icons">
+				Icons <small>(up to 4, shown like a blueprint's)</small>
+			</label>
+			<input
+				id="challenge-icons"
+				type="text"
+				name="icons"
+				maxlength="500"
+				value={values.icons}
+			/>
+		</IconPicker>
+		<IconPicker targetId="challenge-summary">
+			<label slot="label" for="challenge-summary">
+				Summary <small>(one line for cards)</small>
+			</label>
+			<input
+				id="challenge-summary"
+				type="text"
+				name="summary"
+				maxlength="300"
+				value={values.summary}
+			/>
+		</IconPicker>
+		<IconPicker targetId="challenge-description">
+			<label slot="label" for="challenge-description">
+				Description <small>(Markdown: the story, the criteria in words, examples)</small>
+			</label>
+			<MarkdownEditor
+				id="challenge-description"
+				name="description"
+				value={values.description}
+				maxlength={10000}
+				rows={8}
+			/>
+		</IconPicker>
+	</section>
+
+	<section class="panel">
+		<div class="panel-head">
+			<h2>Dates (UTC)</h2>
+		</div>
+		<div class="grid-fields">
+			<DateTimeField
+				name="starts_at"
+				label="Start"
+				value={toEditorTime(values.starts_at)}
+				required
+			/>
+			<DateTimeField
+				name="ends_at"
+				label="Deadline"
+				value={toEditorTime(values.ends_at)}
+				required
+			/>
+			<DateTimeField
+				name="voting_ends_at"
+				label="Voting ends"
+				value={toEditorTime(values.voting_ends_at)}
+				placeholder="deadline + 3 days"
+				hint="Empty: the deadline + 3 days"
+			/>
+		</div>
+		<label>
+			<input type="checkbox" name="hidden_until_start" checked={values.hidden_until_start} />
+			Hidden until it starts (not listed or found before; an advent calendar)
+		</label>
+	</section>
+
+	<section class="panel">
+		<div class="panel-head">
+			<h2>Environment</h2>
+		</div>
+		<div class="grid-fields">
+			<label>
+				Content
+				<select name="content">
+					<option value="space-age" selected={rules.content === "space-age"}>
+						Space Age
+					</option>
+					<option value="vanilla" selected={rules.content === "vanilla"}>
+						Base game only
+					</option>
+				</select>
+				<small>Space Age includes quality, elevated rails and the recycler.</small>
+			</label>
+			<label>
+				Kind
+				<select name="kind">
+					<option value="any" selected={rules.kind === "any"}>
+						Factory or platform
+					</option>
+					<option value="factory" selected={rules.kind === "factory"}>
+						Factory (not a platform)
+					</option>
+					<option value="platform" selected={rules.kind === "platform"}>
+						Space platform
+					</option>
+				</select>
+			</label>
+		</div>
+	</section>
+
+	<section class="panel">
+		<div class="panel-head">
+			<h2>Goal, restrictions and imports</h2>
+		</div>
+		<ChallengeRules client:load params={params} rules={rules} />
+		<ChallengeImports client:load imports={rules.imports} />
+	</section>
+
+	<section class="panel">
+		<div class="panel-head">
+			<h2>Options</h2>
+		</div>
+		<label>
+			<input
+				type="checkbox"
+				name="require_new_revisions"
+				checked={values.require_new_revisions}
+			/>
+			Only revisions uploaded after the start count
+		</label>
+		<label>
+			<input
+				type="checkbox"
+				name="voters_before_start"
+				checked={values.voters_before_start}
+			/>
+			Voters must have signed up before the start (turn off for the launch challenge)
+		</label>
+		<label>
+			<input type="checkbox" name="live_leaderboard" checked={values.live_leaderboard} />
+			Show scores while open (live leaderboard)
+		</label>
+		<label>
+			<input type="checkbox" name="voting_enabled" checked={values.voting_enabled} />
+			Community voting
+		</label>
+		<label class="votes">
+			Votes per user
+			<input
+				type="number"
+				name="votes_per_user"
+				min="1"
+				max="20"
+				value={values.votes_per_user}
+			/>
+		</label>
+	</section>
+
+	{started && (
+		<label class="confirm">
+			<input type="checkbox" name="confirm_rescore" />
+			The challenge has started: I confirm that changing its rules rescores every entry.
+		</label>
+	)}
+	<button type="submit">{submitLabel}</button>
+</form>
+
+<style>
+	.grid-fields {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+		align-items: start;
+		gap: 0 1rem;
+	}
+	.grid-fields > :global(label) {
+		margin-bottom: var(--pico-spacing);
+	}
+	.grid-fields :global(input),
+	.grid-fields :global(select) {
+		margin-bottom: 0.3rem;
+	}
+	/* Pico pulls a hint up under a full-margin field; these fields keep a small
+	   margin, so the hint would overlap the field's border. */
+	.grid-fields :global(small) {
+		display: block;
+		margin-top: 0;
+		color: var(--pico-muted-color);
+		line-height: 1.3;
+	}
+	.votes {
+		max-width: 14rem;
+	}
+	.votes input {
+		margin-top: 0.25rem;
+	}
+	.confirm {
+		margin: 1rem 0;
+		font-weight: 600;
+	}
+</style>

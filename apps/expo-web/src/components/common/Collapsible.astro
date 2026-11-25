@@ -1,0 +1,140 @@
+---
+// Shared collapsible block so every section of the detail page looks and
+// behaves the same. `pane` is a page section with a heading; `card` is a
+// bordered item (stop, interrupt) with custom summary content in the "title"
+// slot. The whole header row is clickable.
+interface Props {
+	title?: string;
+	count?: number;
+	open?: boolean;
+	variant?: "pane" | "card";
+}
+
+const { title, count, open = true, variant = "pane" } = Astro.props;
+---
+
+<details
+	class:list={[
+		"collapsible",
+		{ "has-actions": Astro.slots.has("actions") },
+		{ "collapsible--pane": variant === "pane", "collapsible--card": variant === "card" },
+	]}
+	open={open}
+>
+	<summary>
+		<slot name="title">
+			<h2 class="collapsible-title">
+				{title}
+				{count !== undefined && <small>{count}</small>}
+			</h2>
+		</slot>
+		{Astro.slots.has("actions") && (
+			<span class="collapsible-actions">
+				<slot name="actions" />
+			</span>
+		)}
+	</summary>
+	<div class="collapsible-body">
+		<slot />
+	</div>
+</details>
+
+<style>
+	.collapsible {
+		min-width: 0;
+	}
+
+	.collapsible--pane {
+		margin-bottom: 1rem;
+		padding: 0.75rem 1rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-card-background-color, var(--pico-background-color));
+		box-shadow: var(--pico-card-box-shadow);
+		height: min-content;
+	}
+
+	.collapsible > summary {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0;
+		cursor: pointer;
+		list-style: none;
+		user-select: none;
+	}
+
+	.collapsible > summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.collapsible > summary::after {
+		content: "";
+		flex: none;
+		float: none;
+		width: 0.5rem;
+		height: 0.5rem;
+		margin: 0 0.2rem 0.2rem auto;
+		border-right: 2px solid var(--pico-muted-color);
+		border-bottom: 2px solid var(--pico-muted-color);
+		background: none;
+		transform: rotate(-45deg);
+		transition: transform 0.15s;
+	}
+
+	.collapsible[open] > summary::after {
+		margin-bottom: 0.2rem;
+		transform: rotate(45deg);
+	}
+
+	.collapsible > summary:hover::after {
+		border-color: var(--pico-color);
+	}
+
+	/* Header buttons (copy etc.) sit right before the chevron. */
+	.collapsible-actions {
+		display: inline-flex;
+		margin-left: auto;
+	}
+
+	.has-actions > summary::after {
+		margin-left: 0;
+	}
+
+	.collapsible-title {
+		margin: 0;
+		font-size: 1.25rem;
+	}
+
+	.collapsible-title small {
+		color: var(--pico-muted-color);
+		font-weight: 400;
+	}
+
+	.collapsible-body {
+		padding-top: 0.5rem;
+	}
+
+	.collapsible--card {
+		margin-bottom: 0;
+		padding: 0.45rem 0.7rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-background-color);
+	}
+
+	.collapsible--card > .collapsible-body {
+		padding-top: 0;
+	}
+
+	/* Phones: a smaller title and tighter header buttons keep a pane's header
+	   (title, its actions, the chevron) on one line. */
+	@media (max-width: 30rem) {
+		.collapsible-title {
+			font-size: 1.1rem;
+		}
+		.collapsible-actions :global(.icon-button) {
+			width: 2.25rem;
+		}
+	}
+</style>

@@ -1,0 +1,493 @@
+---
+import { assetUrl } from "@lib/api/public-asset";
+import Download from "@lucide/astro/icons/download";
+import LifeBuoy from "@lucide/astro/icons/life-buoy";
+import Globe from "@lucide/astro/icons/globe";
+import KeyRound from "@lucide/astro/icons/key-round";
+import Trash from "@lucide/astro/icons/trash";
+import User from "@lucide/astro/icons/user";
+import ProviderButton from "@components/auth/ProviderButton.astro";
+import { inDisplayOrder } from "@components/auth/provider-order";
+import Page from "@layouts/Page.astro";
+import ModalDialog from "@components/common/ModalDialog.astro";
+import { providerStartPath, type SignInMethods, type UserSession } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server";
+import { signInErrorText } from "@lib/sign-in-errors";
+import { isoDate } from "@factorio-expo/ui/utils/dates.ts";
+import { getViewer, redirectToLogin } from "@lib/viewer";
+
+const viewer = await getViewer(Astro);
+if (viewer.state !== "in") return redirectToLogin(Astro);
+const { user } = viewer;
+const profilePath = `/u/${encodeURIComponent(user.username)}`;
+
+// Either failing is shown as unavailable below; the rest of the page still works.
+const api = getServerApiClient(Astro);
+const [methodsResult, sessionsResult] = await Promise.allSettled([
+	api.auth.signInMethods(),
+	api.auth.sessions(),
+]);
+const methods: SignInMethods | undefined =
+	methodsResult.status === "fulfilled" ? methodsResult.value : undefined;
+const sessions: UserSession[] | undefined =
+	sessionsResult.status === "fulfilled" ? sessionsResult.value.sessions : undefined;
+const total = methods ? methods.identities.length + methods.passkeys.length : 0;
+const linkable = methods
+	? inDisplayOrder(
+			methods.providers.filter((p) => !methods.identities.some((i) => i.provider === p.id)),
+		)
+	: [];
+const linkHref = (provider: string) => assetUrl(providerStartPath(provider, { link: true }));
+// "Confirm it's you" offers the account's own sign-in methods.
+const confirmProviders = methods
+	? inDisplayOrder(
+			methods.identities.map((identity) => ({
+				id: identity.provider,
+				label: identity.label,
+			})),
+		)
+	: [];
+const confirmHref = (provider: string) => assetUrl(providerStartPath(provider, { reauth: true }));
+const sessionLabel = (session: UserSession, index: number) =>
+	session.current ? "This device" : `Session ${index + 1}`;
+const linked = methods?.providers.find((p) => p.id === Astro.url.searchParams.get("linked"));
+const error = signInErrorText(Astro.url.searchParams.get("error"));
+---
+
+<Page title="Account settings" nav="settings" noindex>
+	<h1>Account settings</h1>
+	<dl data-settings>
+		<dt>
+			<User aria-hidden="true" />
+			Username
+		</dt>
+		<dd>{user.username}</dd>
+		<dt>
+			<Globe aria-hidden="true" />
+			Public profile
+		</dt>
+		<dd>
+			<a href={profilePath}>/u/{user.username}</a>
+		</dd>
+	</dl>
+
+	<h2 id="sign-in-methods">Sign-in methods</h2>
+	{linked && <p role="status">{linked.label} is linked. You can now log in with it.</p>}
+	{error && (
+		<p role="alert" class="error">
+			{error}
+		</p>
+	)}
+	{methods ? (
+		<section data-sign-in-methods>
+			{total === 1 ? (
+				<p class="warning" data-recovery-warning role="note">
+					<strong>You have only one way to log in.</strong> If you lose it, you will need
+					your recovery code. Add a second passkey or link a provider.
+				</p>
+			) : (
+				<p class="recovery-note" data-recovery-note>
+					There is no email or password to reset: if you lose every way to log in, only
+					your recovery code gets you back in.
+				</p>
+			)}
+			<ul>
+				{methods.identities.map((identity) => (
+					<li>
+						<span>
+							<strong>{identity.label}</strong>
+							<small>
+								linked{" "}
+								<time datetime={identity.created_at} data-local="date">
+									{isoDate(identity.created_at)}
+								</time>
+							</small>
+						</span>
+						<button
+							type="button"
+							class="secondary outline"
+							data-remove-identity={identity.provider}
+							aria-label={`Remove ${identity.label}`}
+							disabled={total <= 1}
+						>
+							Remove
+						</button>
+					</li>
+				))}
+				{methods.passkeys.map((passkey, index) => (
+					<li>
+						<span>
+							<strong>Passkey {index + 1}</strong>
+							<small>
+								added{" "}
+								<time datetime={passkey.created_at} data-local="date">
+									{isoDate(passkey.created_at)}
+								</time>
+								{passkey.last_used_at && (
+									<>
+										· last used{" "}
+										<time datetime={passkey.last_used_at} data-local="date">
+											{isoDate(passkey.last_used_at)}
+										</time>
+									</>
+								)}
+							</small>
+						</span>
+						<button
+							type="button"
+							class="secondary outline"
+							data-remove-passkey={passkey.id}
+							aria-label={`Remove passkey ${index + 1}`}
+							disabled={total <= 1}
+						>
+							Remove
+						</button>
+					</li>
+				))}
+			</ul>
+			<div class="add">
+				{/* Enabled by sign-in-methods.ts once it knows this browser has passkeys. */}
+				<button type="button" class="with-icon" data-add-passkey disabled>
+					<KeyRound aria-hidden="true" />
+					Add a passkey on this device
+				</button>
+			</div>
+			{linkable.length > 0 && (
+				<>
+					<h3>Link another account</h3>
+					<div class="links" data-link-providers>
+						{linkable.map((provider) => (
+							<ProviderButton
+								provider={provider}
+								href={linkHref(provider.id)}
+								action="link"
+							/>
+						))}
+					</div>
+				</>
+			)}
+			<p data-methods-status role="status" aria-live="polite"></p>
+			<ModalDialog
+				titleId="confirm-identity-title"
+				title="Confirm it's you"
+				closeLabel="Cancel"
+			>
+				<div data-confirm-identity>
+					<p>
+						Changing how you log in, generating a recovery code, downloading your data
+						or deleting your account needs a recent login. Log in again with this
+						account to continue.
+					</p>
+					<div class="links">
+						{/* Shown by sign-in-methods.ts once it knows this browser has passkeys. */}
+						{methods.passkeys.length > 0 && (
+							<button type="button" class="with-icon" data-confirm-passkey hidden>
+								<KeyRound aria-hidden="true" />
+								Use a passkey
+							</button>
+						)}
+						{confirmProviders.map((provider) => (
+							<ProviderButton
+								provider={provider}
+								href={confirmHref(provider.id)}
+								action="continue"
+							/>
+						))}
+					</div>
+					<p data-confirm-status role="status" aria-live="polite"></p>
+				</div>
+			</ModalDialog>
+		</section>
+	) : (
+		<p role="alert">Your sign-in methods could not be loaded. Reload the page to try again.</p>
+	)}
+
+	<h2>Where you're logged in</h2>
+	{sessions ? (
+		<section data-sessions>
+			<ul>
+				{sessions.map((session, index) => (
+					<li>
+						<span>
+							<strong>{sessionLabel(session, index)}</strong>
+							<small>
+								logged in{" "}
+								<time datetime={session.created_at} data-local="date">
+									{isoDate(session.created_at)}
+								</time>{" "}
+								· last used{" "}
+								<time datetime={session.last_used_at} data-local="date">
+									{isoDate(session.last_used_at)}
+								</time>
+							</small>
+						</span>
+						<button
+							type="button"
+							class="secondary outline"
+							data-end-session={session.id}
+							data-current={session.current ? "" : undefined}
+							aria-label={`Log out ${sessionLabel(session, index).toLowerCase()}`}
+						>
+							Log out
+						</button>
+					</li>
+				))}
+			</ul>
+			<button type="button" class="secondary" data-end-all-sessions>
+				Log out everywhere
+			</button>
+			<p data-sessions-status role="status" aria-live="polite"></p>
+		</section>
+	) : (
+		<p role="alert">Your sessions could not be loaded. Reload the page to try again.</p>
+	)}
+
+	{/* Handled by sign-in-methods.ts, whose "Confirm it's you" dialog it shares. */}
+	{methods && (
+		<>
+			<h2>Recovery code</h2>
+			<section data-recovery-code>
+				<p>
+					Your account has a recovery code, shown once when it was made. If you lost it,
+					or think someone saw it, generate a new one: the old code stops working at once.
+					The new one is shown once too; saving it is up to you.
+				</p>
+				<button type="button" class="secondary with-icon" data-new-recovery-code>
+					<LifeBuoy aria-hidden="true" />
+					Generate a new recovery code
+				</button>
+				<p data-recovery-code-status role="status" aria-live="polite"></p>
+			</section>
+
+			<h2>Your data</h2>
+			<section data-your-data>
+				<p>
+					Download everything this site holds about your account as one JSON file: your
+					account, sign-in methods and sessions (dates only), your entries with every
+					revision's blueprint string, comments, favorites, collections and the reports
+					you filed.
+				</p>
+				<button
+					type="button"
+					class="secondary with-icon"
+					data-export
+					data-username={user.username}
+				>
+					<Download aria-hidden="true" />
+					Export my data
+				</button>
+				<p data-export-status role="status" aria-live="polite"></p>
+			</section>
+
+			<h2>Delete account</h2>
+			<section data-delete-account>
+				<p>
+					Deletes your account and everything you uploaded while logged in. This can't be
+					undone.
+				</p>
+				<button type="button" class="secondary outline with-icon danger" data-delete-open>
+					<Trash aria-hidden="true" />
+					Delete account
+				</button>
+				<p data-delete-status role="status" aria-live="polite"></p>
+				<ModalDialog
+					titleId="delete-account-title"
+					title="Delete your account?"
+					closeLabel="Close"
+				>
+					<form data-delete-form>
+						<p>This happens at once:</p>
+						<ul class="consequences">
+							<li>
+								You are logged out on every device, and your passkeys and linked
+								accounts are removed. Nobody can log in to this account again.
+							</li>
+							<li>
+								Your profile and every entry you uploaded while logged in (public,
+								unlisted and private) disappear from the site and from search.
+							</li>
+							<li>
+								Your comments are emptied. Each one shows that its author deleted
+								their account.
+							</li>
+							<li>Your favorites and collections are removed.</li>
+						</ul>
+						<p>
+							Entries you uploaded without logging in stay, and their edit links keep
+							working. Seven days later everything left of the account is erased for
+							good, and the username <strong>{user.username}</strong> can be taken
+							again. Nobody can restore the account, staff included.
+						</p>
+						<p>Want a copy first? Use "Export my data" above before you delete.</p>
+						<label>
+							Type your username to confirm
+							<input
+								name="username"
+								autocomplete="off"
+								autocapitalize="off"
+								spellcheck="false"
+								required
+								data-delete-username
+								data-expected={user.username}
+							/>
+						</label>
+						<div class="dialog-actions">
+							<button type="button" class="secondary" data-delete-cancel>
+								Cancel
+							</button>
+							<button type="submit" class="danger" data-delete-confirm disabled>
+								Delete my account
+							</button>
+						</div>
+					</form>
+				</ModalDialog>
+			</section>
+		</>
+	)}
+</Page>
+
+<script>
+	import "@components/account/sign-in-methods.ts";
+	import "@components/account/sessions.ts";
+</script>
+
+<style>
+	dt {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		color: var(--pico-muted-color);
+		font-size: 0.875rem;
+	}
+	dt :global(svg) {
+		width: 1.1em;
+		height: 1.1em;
+		flex: none;
+	}
+	dd {
+		min-height: 1.5rem;
+		margin-bottom: 1rem;
+	}
+	[data-sign-in-methods],
+	[data-sessions],
+	[data-recovery-code],
+	[data-your-data],
+	[data-delete-account] {
+		max-width: 32rem;
+	}
+	[data-end-all-sessions],
+	[data-export],
+	[data-new-recovery-code],
+	[data-delete-open] {
+		width: auto;
+	}
+	/* Red on both the outline opener and the filled confirm button. */
+	.danger {
+		--pico-color: var(--pico-del-color);
+		--pico-border-color: var(--pico-del-color);
+	}
+	.danger:not(.outline) {
+		--pico-background-color: var(--pico-del-color);
+		--pico-color: var(--pico-primary-inverse);
+	}
+	.danger:not(:disabled):is(:hover, :active, :focus) {
+		--pico-border-color: var(--pico-del-color);
+	}
+	.danger.outline:not(:disabled):is(:hover, :active, :focus) {
+		--pico-color: var(--pico-del-color);
+	}
+	.danger:not(.outline):not(:disabled):is(:hover, :active, :focus) {
+		--pico-background-color: var(--pico-del-color);
+		filter: brightness(0.9);
+	}
+	ul.consequences {
+		padding-left: 1.25rem;
+	}
+	ul.consequences li {
+		display: list-item;
+		list-style: disc;
+		padding: 0.15rem 0;
+		border: none;
+	}
+	.dialog-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
+	}
+	.dialog-actions button {
+		width: auto;
+		margin: 0;
+	}
+	ul {
+		padding: 0;
+	}
+	li {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		list-style: none;
+		padding: 0.5rem 0;
+		border-bottom: 1px solid var(--pico-muted-border-color);
+	}
+	li span {
+		display: grid;
+	}
+	/* The button keeps its one line; the text beside it wraps instead. */
+	li button {
+		flex: none;
+		width: auto;
+		margin: 0;
+		white-space: nowrap;
+	}
+	li time {
+		white-space: nowrap;
+	}
+	.add {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	.add > :global(*) {
+		width: auto;
+		margin: 0;
+	}
+	.links {
+		display: grid;
+		gap: 0.5rem;
+	}
+	.with-icon {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.with-icon :global(svg) {
+		width: 1.15rem;
+		height: 1.15rem;
+		flex: none;
+	}
+	h3 {
+		margin: 1.5rem 0 0.75rem;
+		font-size: 1rem;
+	}
+	.warning {
+		padding: 0.75rem 1rem;
+		border: 1px solid var(--pico-del-color);
+		border-radius: var(--pico-border-radius);
+	}
+	.recovery-note {
+		color: var(--pico-muted-color);
+		font-size: 0.875rem;
+	}
+	.error {
+		color: var(--pico-del-color);
+	}
+	[data-methods-status]:empty,
+	[data-sessions-status]:empty,
+	[data-export-status]:empty,
+	[data-recovery-code-status]:empty,
+	[data-delete-status]:empty,
+	[data-confirm-status]:empty {
+		margin: 0;
+	}
+</style>

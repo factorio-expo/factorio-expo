@@ -1,0 +1,48 @@
+---
+// Compact icon grid (entities, recipes); names appear as tooltips.
+import Collapsible from "@components/common/Collapsible.astro";
+import Chip from "@components/common/Chip.astro";
+
+interface Props {
+	title: string;
+	emptyText: string;
+	items: { iconToken: string; label: string; count?: number }[];
+}
+
+const { title, emptyText, items } = Astro.props;
+---
+
+<Collapsible title={title} count={items.length}>
+	{items.length === 0 ? (
+		<p>
+			<small>{emptyText}</small>
+		</p>
+	) : (
+		<ul class="chip-list">
+			{items.map((item) => (
+				<li>
+					<Chip iconToken={item.iconToken} label={item.label}>
+						{item.count !== undefined && <Fragment>{item.count}</Fragment>}
+					</Chip>
+				</li>
+			))}
+		</ul>
+	)}
+</Collapsible>
+
+<style>
+	.chip-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.chip-list li {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+</style>

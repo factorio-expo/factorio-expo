@@ -1,0 +1,177 @@
+---
+// The console shell, mirroring expo-web: header, sidebar, content.
+import "@styles/global.scss";
+import "@factorio-expo/ui/game/game-icons.css";
+import "@factorio-expo/ui/game/rich-text.css";
+import RichText from "@factorio-expo/ui/game/RichText.astro";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { gameIconVariables } from "@factorio-expo/ui/game/game-icons.ts";
+import { ADMIN_ACCESS_TEAM_DOMAIN } from "astro:env/server";
+import { Font } from "astro:assets";
+import LogOut from "@lucide/astro/icons/log-out";
+
+import SideNav, { type NavKey } from "@components/SideNav.astro";
+import { accessLogoutUrl } from "@lib/access";
+import { adminApi } from "@lib/api/client";
+import type { Badges } from "@lib/api/types";
+
+export interface Props {
+	title: string;
+	nav?: NavKey;
+	/** One line under the title saying what the page is for. */
+	description?: string | undefined;
+}
+
+const { title, nav = "none", description } = Astro.props;
+const { username } = Astro.locals.staff;
+// The sidebar's open report counts; a page still renders without them.
+let badges: Badges | undefined;
+try {
+	badges = await adminApi(username).badges();
+} catch (error) {
+	console.warn("admin badges unavailable", error);
+}
+---
+
+<html lang="en" style={gameIconVariables("/game-icons/")}>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="robots" content="noindex, nofollow" />
+		<link rel="icon" type="image/png" href="/favicon.png" />
+		<title>{stripRichText(title)} · Expo admin</title>
+		<Font cssVariable="--font-doppio-one" preload />
+	</head>
+	<body>
+		<header class="container">
+			<a class="brand" href="/">
+				<img src="/favicon.png" width="500" height="500" alt="" />
+				<strong>Factorio Expo</strong>
+				<span class="admin-mark">admin</span>
+			</a>
+			<div class="who">
+				<span>{username}</span>
+				{ADMIN_ACCESS_TEAM_DOMAIN && (
+					<a
+						href={accessLogoutUrl(ADMIN_ACCESS_TEAM_DOMAIN)}
+						role="button"
+						class="secondary outline"
+						aria-label="Log out"
+					>
+						<LogOut class="icon" aria-hidden="true" />
+						<span class="label">Log out</span>
+					</a>
+				)}
+			</div>
+		</header>
+		<main class="container">
+			<div class="shell">
+				<SideNav active={nav} badges={badges} />
+				<div class="content">
+					<div class="page-head">
+						<div>
+							<h1>
+								<RichText text={title} />
+							</h1>
+							{description && <p class="muted">{description}</p>}
+						</div>
+						<slot name="actions" />
+					</div>
+					<slot />
+				</div>
+			</div>
+		</main>
+		<script>
+			import "../scripts/confirm.ts";
+		</script>
+	</body>
+</html>
+
+<style>
+	header.container,
+	main.container {
+		max-width: 90rem;
+		padding-inline: clamp(1rem, 3vw, 2rem);
+	}
+	header.container {
+		position: sticky;
+		top: 0;
+		z-index: 100;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding-block: 0.75rem;
+		margin-bottom: 1.5rem;
+		border-bottom: 1px solid var(--pico-muted-border-color);
+		background: var(--pico-background-color);
+	}
+	.brand {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		color: var(--pico-color);
+		text-decoration: none;
+	}
+	.brand strong {
+		white-space: nowrap;
+	}
+	.brand img {
+		width: 1.75rem;
+		height: 1.75rem;
+	}
+	.admin-mark {
+		padding: 0.1rem 0.45rem;
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-primary-background);
+		color: var(--pico-primary-inverse);
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	.who {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+	.who [role="button"] {
+		margin: 0;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.4rem 0.75rem;
+	}
+	.shell {
+		display: grid;
+		grid-template-columns: 14rem minmax(0, 1fr);
+		gap: 2rem;
+		align-items: start;
+	}
+	.content {
+		min-width: 0;
+	}
+	.page-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 0.75rem 1rem;
+		margin-bottom: 1.25rem;
+	}
+	.page-head h1 {
+		margin: 0;
+		font-size: 1.5rem;
+	}
+	.page-head p {
+		margin: 0.2rem 0 0;
+	}
+	@media (max-width: 40rem) {
+		.shell {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 1rem;
+		}
+		.who .label {
+			display: none;
+		}
+	}
+</style>

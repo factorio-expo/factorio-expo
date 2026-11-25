@@ -1,0 +1,182 @@
+---
+// Train and space platform schedules, read-only, laid out like the game's
+// schedule window: the stops in order with their wait conditions, then the
+// interrupts, each folded to its name and opened to "When" (its conditions)
+// beside "Go to" (its target stops).
+import type { BlueprintSchedule } from "@lib/api";
+import Collapsible from "@components/common/Collapsible.astro";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import ConditionList from "./schedule/ConditionList.astro";
+import ScheduleStops from "./schedule/ScheduleStops.astro";
+import "./schedule/schedule-tree.css";
+
+interface Props {
+	schedules?: BlueprintSchedule[] | null;
+	platform?: boolean;
+}
+
+const { schedules, platform = false } = Astro.props;
+const rows = (Array.isArray(schedules) ? schedules : []).filter((item) => item?.schedule);
+const kind = platform ? "Space platform schedule" : "Train schedule";
+const plural = (count: number, one: string, many = `${one}s`) =>
+	`${count} ${count === 1 ? one : many}`;
+---
+
+{rows.length > 0 && (
+	<Collapsible title={platform ? "Platform schedule" : "Train schedules"} count={rows.length}>
+		<div class="schedules">
+			{rows.map((item, index) => {
+				const stops = item.schedule?.records ?? [];
+				const interrupts = item.schedule?.interrupts ?? [];
+				const locomotives = platform ? 0 : (item.locomotives?.length ?? 0);
+				return (
+					<section class="schedule">
+						{rows.length > 1 ? (
+							<h3>
+								{`${kind} ${index + 1}`}
+								{locomotives > 0 && (
+									<small> · {plural(locomotives, "locomotive")}</small>
+								)}
+							</h3>
+						) : (
+							locomotives > 0 && (
+								<p class="meta">{plural(locomotives, "locomotive")}</p>
+							)
+						)}
+						<div class="part">
+							<p class="st-label">
+								Stops <small>{stops.length}</small>
+							</p>
+							{stops.length > 0 ? (
+								<ScheduleStops stops={stops} platform={platform} />
+							) : (
+								<p class="st-none">No stops.</p>
+							)}
+						</div>
+						{interrupts.length > 0 && (
+							<div class="part">
+								<p class="st-label">
+									Interrupts <small>{interrupts.length}</small>
+								</p>
+								<div class="interrupts">
+									{interrupts.map((interrupt) => (
+										<Collapsible variant="card" open={false}>
+											<div slot="title" class="interrupt-head">
+												<strong
+													set:html={formatRichText(
+														interrupt.name || "Unnamed interrupt",
+													)}
+												/>
+												{interrupt.inside_interrupt && (
+													<small class="st-tag">
+														interrupts other interrupts
+													</small>
+												)}
+												<small class="go-count">
+													→{" "}
+													{plural(interrupt.targets?.length ?? 0, "stop")}
+												</small>
+											</div>
+											<div class="interrupt-body">
+												<div>
+													<p class="st-label">When</p>
+													<ConditionList
+														conditions={interrupt.conditions}
+														empty="No condition"
+													/>
+												</div>
+												<div>
+													<p class="st-label">Go to</p>
+													{(interrupt.targets?.length ?? 0) > 0 ? (
+														<ScheduleStops
+															stops={interrupt.targets}
+															platform={platform}
+														/>
+													) : (
+														<p class="st-none">No target stops.</p>
+													)}
+												</div>
+											</div>
+										</Collapsible>
+									))}
+								</div>
+							</div>
+						)}
+					</section>
+				);
+			})}
+		</div>
+	</Collapsible>
+)}
+
+<style>
+	.schedules {
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+	}
+
+	/* Several schedules: a rule between them. */
+	.schedule + .schedule {
+		padding-top: 1rem;
+		border-top: 1px solid var(--pico-muted-border-color);
+	}
+
+	.schedule h3 {
+		margin-bottom: 0.5rem;
+		font-size: 1rem;
+	}
+
+	.meta {
+		margin: 0 0 0.5rem;
+		color: var(--pico-muted-color);
+		font-size: 0.85rem;
+	}
+
+	.schedule h3 small {
+		color: var(--pico-muted-color);
+		font-weight: 400;
+	}
+
+	.part + .part {
+		margin-top: 1rem;
+	}
+
+	.interrupts {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+
+	.interrupt-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.3rem 0.5rem;
+		min-width: 0;
+		font-size: 0.95rem;
+	}
+
+	.interrupt-head strong {
+		overflow-wrap: anywhere;
+	}
+
+	.go-count {
+		color: var(--pico-muted-color);
+		font-size: 0.8rem;
+		white-space: nowrap;
+	}
+
+	/* "When" beside "Go to" where there is room, stacked on phones. */
+	.interrupt-body {
+		display: grid;
+		gap: 0.75rem 1.5rem;
+		padding: 0.5rem 0 0.25rem;
+	}
+
+	@media (min-width: 48rem) {
+		.interrupt-body {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		}
+	}
+</style>

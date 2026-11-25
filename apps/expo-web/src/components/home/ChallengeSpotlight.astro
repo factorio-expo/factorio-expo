@@ -1,0 +1,155 @@
+---
+// The home page's featured challenge: icons, goal, deadline and the entries
+// leading it (ranked when scores show), with ways to read more or enter.
+import Trophy from "@lucide/astro/icons/trophy";
+import ChallengeDates from "@components/challenge/ChallengeDates.astro";
+import ChallengeIcon from "@components/challenge/ChallengeIcon.astro";
+import EntryCard from "@components/entry/EntryCard.astro";
+import type { ChallengeDetail } from "@lib/api";
+import { toCard } from "@utils/entry-card.ts";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+
+interface Props {
+	challenge: ChallengeDetail;
+}
+const { challenge } = Astro.props;
+const href = `/challenges/${encodeURIComponent(challenge.slug)}`;
+const open = challenge.status === "open";
+// Entries that fail the rules are not showcased; ranked ones lead.
+const leading = challenge.entries
+	.filter((item) => item.status !== "rejected")
+	.toSorted((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity))
+	.slice(0, 3);
+---
+
+<section class="spotlight" aria-labelledby="spotlight-title">
+	<div class="intro">
+		<p class="eyebrow">
+			<Trophy aria-hidden="true" /> {open ? "Open challenge" : "Voting now"}
+		</p>
+		<div class="title-row">
+			<ChallengeIcon icons={challenge.icons} />
+			<h2 id="spotlight-title">
+				<a href={href} set:html={formatRichText(challenge.title)} />
+			</h2>
+		</div>
+		{challenge.summary && <p set:html={formatRichText(challenge.summary)} />}
+		<p class="goal">
+			<strong>Goal:</strong> <span set:html={formatRichText(challenge.rules.goal)} />
+		</p>
+		<ChallengeDates challenge={challenge} compact />
+		<p class="counts">
+			{challenge.entry_count}
+			{challenge.entry_count === 1 ? "entry" : "entries"} so far
+		</p>
+		<div class="buttons">
+			<a href={href} role="button">
+				{open ? "Enter the challenge" : "See and vote"}
+			</a>
+			<a href="/challenges" role="button" class="outline secondary">
+				All challenges
+			</a>
+		</div>
+	</div>
+	{leading.length > 0 && (
+		<div class="leading">
+			{leading.map((item, index) => (
+				<div class="entry">
+					{challenge.scores_visible && item.rank && (
+						<span class="rank" aria-label={`Rank ${item.rank}`}>
+							#{item.rank}
+						</span>
+					)}
+					<EntryCard card={toCard(item.entry)} eager={index === 0} headingLevel={3} />
+				</div>
+			))}
+		</div>
+	)}
+</section>
+
+<style>
+	.spotlight {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 1.5rem;
+		margin-bottom: 2.5rem;
+		padding: clamp(1rem, 3vw, 1.75rem);
+		border: 1px solid
+			color-mix(in srgb, var(--pico-primary) 40%, var(--pico-muted-border-color));
+		border-radius: 1rem;
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--pico-primary) 10%, var(--pico-card-background-color)),
+			var(--pico-card-background-color) 60%
+		);
+	}
+	@media (min-width: 62rem) {
+		.spotlight {
+			grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+		}
+	}
+	.eyebrow {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin: 0 0 0.5rem;
+		color: var(--pico-primary);
+		font-size: 0.8rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+	.eyebrow :global(svg) {
+		width: 1.1rem;
+		height: 1.1rem;
+	}
+	.title-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 0.5rem;
+	}
+	h2 {
+		margin: 0;
+		font-size: 1.5rem;
+	}
+	h2 a {
+		text-decoration: none;
+	}
+	.goal {
+		font-size: 0.95rem;
+	}
+	.counts {
+		margin: 0.5rem 0 1rem;
+		color: var(--pico-muted-color);
+		font-size: 0.9rem;
+	}
+	.buttons {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	.buttons a {
+		margin: 0;
+	}
+	.leading {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+		gap: 1rem;
+		align-content: start;
+	}
+	.entry {
+		position: relative;
+	}
+	.rank {
+		position: absolute;
+		top: 0.5rem;
+		left: 0.5rem;
+		z-index: 1;
+		padding: 0.1rem 0.5rem;
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-primary-background);
+		color: var(--pico-primary-inverse);
+		font-weight: 700;
+	}
+</style>

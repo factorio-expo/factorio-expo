@@ -1,0 +1,91 @@
+---
+// One-time notice with a new anonymous entry's edit link. The upload (or quick
+// preview) form hands the token over in session storage (lib/edit-link.ts) and
+// opens the entry on its clean link, which is safe to share; this shows the
+// edit link once and forgets it.
+interface Props {
+	entryId: string;
+	/** A quick preview: read-only, so the link is only for publishing it. */
+	preview?: boolean;
+}
+
+const { entryId, preview = false } = Astro.props;
+---
+
+<section class="edit-link" data-edit-link-banner data-entry-id={entryId} role="status" hidden>
+	<p>
+		<strong>Save your edit link. It is shown only once.</strong>
+		{preview
+			? " To publish this preview, open the link while signed in; the link then stops working."
+			: " Anyone with it can edit or delete this entry. To own it, open the link while signed in and publish it to your account; the link then stops working."}
+		{" The page address is safe to share."}
+	</p>
+	<div class="row">
+		<input type="text" readonly aria-label="Edit link" data-edit-link-url />
+		<button type="button" class="secondary" data-copy-edit-link>
+			Copy
+		</button>
+	</div>
+	<p>
+		<a href="/login" data-edit-link-login>
+			Sign in to publish
+		</a>
+	</p>
+</section>
+
+<script>
+	import { loginHref } from "@lib/auth";
+	import { takeEditLink } from "@lib/edit-link";
+	import { editLinkUrl } from "@lib/entry-links";
+
+	for (const banner of document.querySelectorAll<HTMLElement>("[data-edit-link-banner]")) {
+		const entryId = banner.dataset.entryId!;
+		const token = takeEditLink(entryId);
+		if (!token) continue;
+		const link = editLinkUrl(entryId, token, location.origin);
+		const input = banner.querySelector<HTMLInputElement>("[data-edit-link-url]")!;
+		input.value = link;
+		const url = new URL(link);
+		const login = banner.querySelector<HTMLAnchorElement>("[data-edit-link-login]")!;
+		login.href = loginHref(url.pathname + url.search);
+		const copy = banner.querySelector<HTMLButtonElement>("[data-copy-edit-link]")!;
+		copy.addEventListener("click", async () => {
+			try {
+				await navigator.clipboard.writeText(link);
+				copy.textContent = "Copied!";
+			} catch {
+				input.select();
+				copy.textContent = "Copy failed";
+			}
+		});
+		banner.hidden = false;
+	}
+</script>
+
+<style>
+	.edit-link {
+		margin-bottom: 1.5rem;
+		padding: 1rem 1.25rem;
+		border: 1px solid var(--pico-primary-border);
+		border-radius: var(--pico-border-radius);
+	}
+	.edit-link p {
+		margin-bottom: 0.75rem;
+	}
+	.edit-link p:last-child {
+		margin-bottom: 0;
+	}
+	.row {
+		display: flex;
+		gap: 0.5rem;
+	}
+	.row input {
+		flex: 1;
+		min-width: 0;
+		margin: 0;
+	}
+	.row button {
+		width: auto;
+		margin: 0;
+	}
+</style>

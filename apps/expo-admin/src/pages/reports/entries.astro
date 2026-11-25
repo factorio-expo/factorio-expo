@@ -1,0 +1,228 @@
+---
+// Entry reports, grouped per entry: the entry as reported next to how it is
+// now. Takedowns (someone else's work) come first. Resolve, ban a reporter, delete the entry (admins), ban the owner.
+import RichText from "@factorio-expo/ui/game/RichText.astro";
+import Outcome from "@components/Outcome.astro";
+import BanReporterForm from "@components/BanReporterForm.astro";
+import Console from "@layouts/Console.astro";
+import { FormError, handlePost } from "@lib/api/actions";
+import { loadFromApi } from "@lib/api/page";
+import type { EntryReport } from "@lib/api/types";
+import { banReporterInput, entryReportReasonText, reporterLabel } from "@lib/bans";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { formText } from "@lib/forms";
+import { siteEntryUrl } from "@lib/site";
+
+const posted = await handlePost(Astro, async (api, form) => {
+	const reason = formText(form, "reason");
+	switch (formText(form, "action")) {
+		case "resolve":
+			await api.resolveEntryReports(formText(form, "entry_id"), reason);
+			return "Reports resolved; the entry stays.";
+		case "ban-reporter": {
+			await api.banEntryReporter(formText(form, "report_id"), banReporterInput(form));
+			return "Reporter banned from reporting; their report is resolved.";
+		}
+		case "delete":
+			if (!reason) throw new FormError("Give a reason to delete the entry.");
+			await api.deleteEntry(formText(form, "entry_id"), reason);
+			return "Entry deleted (restorable) and its reports resolved.";
+		default:
+			throw new FormError("Unknown action.");
+	}
+});
+if (posted) return posted;
+
+const loaded = await loadFromApi(Astro, (api) => api.entryReports());
+const groups = loaded.data;
+
+/** Where the owner's name leads: their account. */
+const ownerHref = (owner: string) => `/users?q=${encodeURIComponent(owner)}`;
+---
+
+<Console
+	title="Entry reports"
+	nav="entry-reports"
+	description="Open reports, grouped per entry: takedowns first, then the oldest. Reports never hide anything by themselves."
+>
+	<Outcome loadError={loaded.error} />
+	{groups && groups.length === 0 && <p class="empty">No open entry reports.</p>}
+	<div class="stack">
+		{groups?.map(({ entry, reports, takedown }) => {
+			const link = siteEntryUrl(entry.id);
+			const snapshotChanged = (report: EntryReport) =>
+				report.title_snapshot !== entry.title ||
+				report.description_snapshot !== entry.description;
+			return (
+				<article
+					class="panel"
+					aria-labelledby={`entry-${entry.id}`}
+					data-takedown={takedown ? "" : undefined}
+				>
+					<div class="panel-head">
+						<h2 id={`entry-${entry.id}`}>
+							{link ? (
+								<a href={link} target="_blank" rel="noopener noreferrer">
+									<RichText text={entry.title} fallback="(untitled)" />
+								</a>
+							) : (
+								<RichText text={entry.title} fallback="(untitled)" />
+							)}
+						</h2>
+						{takedown && (
+							<span class="pill" data-tone="danger">
+								takedown
+							</span>
+						)}
+						<span class="pill" data-tone="warn">
+							{reports.length} report{reports.length === 1 ? "" : "s"}
+						</span>
+					</div>
+					<p class="meta">
+						<a href={`/entries/${encodeURIComponent(entry.id)}`}>
+							<code>{entry.id}</code>
+						</a>
+						<span>
+							by{" "}
+							{entry.owner ? (
+								<a href={ownerHref(entry.owner)}>{entry.owner}</a>
+							) : (
+								"anonymous uploader"
+							)}
+						</span>
+						<span class="pill">{entry.visibility}</span>
+						<span class="muted">revision {entry.current_revision}</span>
+						{entry.deleted && (
+							<span class="pill" data-tone="danger">
+								deleted
+							</span>
+						)}
+						{entry.gone && !entry.deleted && (
+							<span class="pill" data-tone="danger">
+								expired
+							</span>
+						)}
+					</p>
+
+					<ul class="reports">
+						{reports.map((report) => (
+							<li>
+								<p>
+									<strong>{entryReportReasonText[report.reason]}</strong>
+									<span class="muted">
+										{" "}
+										· {reporterLabel(report.reporter)} ·{" "}
+										{isoDateTime(report.created_at)}
+										{report.revision_number !== entry.current_revision &&
+											` · on revision ${report.revision_number}`}
+									</span>
+								</p>
+								{report.note && <p class="note">{report.note}</p>}
+								<div class="report-more">
+									{snapshotChanged(report) && (
+										<details class="more">
+											<summary>Changed since: as reported</summary>
+											<p>
+												<strong>
+													<RichText
+														text={report.title_snapshot}
+														fallback="(untitled)"
+													/>
+												</strong>
+											</p>
+											<pre class="snapshot">{report.description_snapshot}</pre>
+										</details>
+									)}
+									<details class="more">
+										<summary>Ban this reporter</summary>
+										<BanReporterForm
+											reportId={report.id}
+											anonymous={report.reporter.anonymous}
+											label="Ban from reporting"
+											scope="(entries, comments, problems)"
+											small
+										/>
+									</details>
+								</div>
+							</li>
+						))}
+					</ul>
+
+					<form method="post" class="panel-foot actions">
+						<input type="hidden" name="entry_id" value={entry.id} />
+						<input
+							type="text"
+							name="reason"
+							placeholder={
+								entry.deleted ? "Note (optional)" : "Note (required to delete)"
+							}
+							aria-label="Note"
+							maxlength="500"
+						/>
+						<button type="submit" name="action" value="resolve">
+							Resolve, keep entry
+						</button>
+						{!entry.deleted && (
+							<button
+								type="submit"
+								name="action"
+								value="delete"
+								class="danger"
+								data-confirm="Delete this entry? It disappears from the site and search (restorable)."
+							>
+								Delete entry
+							</button>
+						)}
+					</form>
+				</article>
+			);
+		})}
+	</div>
+</Console>
+
+<style>
+	article[data-takedown] {
+		border-left: 4px solid var(--pico-del-color);
+	}
+	.meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem 0.8rem;
+		align-items: center;
+		margin: -0.25rem 0 0.5rem;
+		font-size: 0.9rem;
+	}
+	.reports {
+		margin: 0;
+		padding: 0;
+	}
+	.reports li {
+		list-style: none;
+		padding-block: 0.6rem;
+		border-top: var(--console-border);
+	}
+	.reports li p {
+		margin: 0;
+	}
+	.note {
+		margin-top: 0.3rem !important;
+		white-space: pre-wrap;
+	}
+	.report-more {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem 1.25rem;
+		margin-top: 0.3rem;
+	}
+	.report-more details[open] {
+		flex-basis: 100%;
+	}
+	.snapshot {
+		white-space: pre-wrap;
+		max-height: 12rem;
+		overflow: auto;
+	}
+	.panel-foot {
+		margin-bottom: 0;
+	}
+</style>

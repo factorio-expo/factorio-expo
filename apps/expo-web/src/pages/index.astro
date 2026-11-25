@@ -1,0 +1,175 @@
+---
+// The landing page: a search box into /browse, the open challenge, staff
+// picks, trending, the freshest leaderboard records and newest entries. Every section loads on
+// its own and is left out when it has nothing (or its API call failed), so a
+// hiccup never blanks the page.
+import ChallengeSpotlight from "@components/home/ChallengeSpotlight.astro";
+import HomeHero from "@components/home/HomeHero.astro";
+import HomeSection from "@components/home/HomeSection.astro";
+import TrendingTabs from "@components/home/TrendingTabs.astro";
+import EntryGrid from "@components/entry/EntryGrid.astro";
+import NotedCardGrid from "@components/entry/NotedCardGrid.astro";
+import Page from "@layouts/Page.astro";
+import type {
+	ChallengeDetail,
+	EntrySummary,
+	HomePick,
+	Leaderboard,
+	Modset,
+	SearchResponse,
+	TagGroup,
+	TrendingPeriod,
+} from "@lib/api";
+import { getServerApiClient } from "@lib/api/server";
+import { formatRecordValue, heldFor } from "@lib/achievements";
+import { defaultPeriod, freshRecords, spotlightChallenge, TRENDING_PERIODS } from "@lib/home";
+import { modBadgeRefs } from "@lib/mods";
+import { tagRefs } from "@lib/tags";
+import { toCard } from "@utils/entry-card.ts";
+import { jsonLd } from "@utils/meta.ts";
+
+const api = getServerApiClient(Astro);
+
+/** One section's data: its failure is logged and leaves the section out. */
+async function load<T>(what: string, request: Promise<T>): Promise<T | undefined> {
+	try {
+		return await request;
+	} catch (err) {
+		console.error(`home: ${what} failed`, err);
+		return undefined;
+	}
+}
+
+async function loadSpotlight(): Promise<ChallengeDetail | undefined> {
+	const { challenges } = await api.challenges.list();
+	const featured = spotlightChallenge(challenges);
+	return featured ? await api.challenges.get(featured.slug) : undefined;
+}
+
+/** Every period's entries at once, so the tabs switch without a request. */
+async function loadTrending(): Promise<Record<TrendingPeriod, EntrySummary[]>> {
+	const lists = await Promise.all(
+		TRENDING_PERIODS.map((period) => api.entries.trending(period.value, 8)),
+	);
+	return Object.fromEntries(
+		TRENDING_PERIODS.map((period, index) => [period.value, lists[index]!.entries]),
+	) as Record<TrendingPeriod, EntrySummary[]>;
+}
+
+const [spotlight, trending, newest, tagGroups, modsets, picks, boards] = await Promise.all([
+	load("challenge", loadSpotlight()),
+	load("trending", loadTrending()),
+	load<SearchResponse>("newest", api.search.query({ sort: "created_at:desc", limit: 8 })),
+	load<TagGroup[]>(
+		"tags",
+		api.tags.list().then((list) => list.groups),
+	),
+	load<Modset[]>(
+		"mods",
+		api.modsets.list().then((list) => list.modsets),
+	),
+	load<HomePick[]>(
+		"picks",
+		api.leaderboards.homePicks().then((list) => list.picks),
+	),
+	load<Leaderboard[]>(
+		"records",
+		api.leaderboards.list(1).then((list) => list.boards),
+	),
+]);
+
+const lookups = {
+	tags: (slugs: string[]) => tagRefs(tagGroups ?? [], slugs),
+	modBadges: (values: string[]) => modBadgeRefs(values, modsets ?? []),
+};
+const trendingCards = Object.fromEntries(
+	TRENDING_PERIODS.map((period) => [
+		period.value,
+		(trending?.[period.value] ?? []).map((entry) => toCard(entry)),
+	]),
+) as Record<TrendingPeriod, ReturnType<typeof toCard>[]>;
+const trendingCounts = Object.fromEntries(
+	TRENDING_PERIODS.map((period) => [period.value, trendingCards[period.value].length]),
+) as Record<TrendingPeriod, number>;
+const showTrending = Object.values(trendingCounts).some((count) => count > 0);
+const newestCards = (newest?.results ?? []).map((card) => toCard(card, lookups));
+const pickCards = (picks ?? []).map((pick) => ({
+	card: toCard(pick.card),
+	caption: pick.caption,
+	captionLabel: "Staff pick",
+}));
+const recordCards = freshRecords(boards ?? []).map(({ board, place }) => ({
+	card: toCard(place.card),
+	caption: [
+		board.title,
+		formatRecordValue(place.value, board.unit),
+		board.leader_since ? `held ${heldFor(board.leader_since)}` : "new",
+	].join(" · "),
+	captionLabel: "Record",
+}));
+
+/**
+ * The tags the hero offers, in order: where a player is (stage), the base
+ * they build, what they need next (production), and the space platforms.
+ */
+const HERO_TAGS = [
+	"early-game",
+	"main-bus",
+	"city-block",
+	"mall",
+	"oil-processing",
+	"nuclear-power",
+	"megabase",
+	"cargo-ship",
+];
+const heroTags = tagRefs(tagGroups ?? [], HERO_TAGS).filter((tag) => tag.name !== tag.slug);
+
+const site = Astro.site ?? Astro.url;
+const websiteData = jsonLd({
+	"@context": "https://schema.org",
+	"@type": "WebSite",
+	name: "Factorio Expo",
+	url: site.toString(),
+	potentialAction: {
+		"@type": "SearchAction",
+		target: `${new URL("/browse", site)}?q={search_term_string}`,
+		"query-input": "required name=search_term_string",
+	},
+});
+---
+
+<Page
+	title="Share and preview Factorio blueprints"
+	nav="home"
+	description="Share, search and preview Factorio blueprints and books, with rendered previews and production-rate analysis."
+	canonicalPath="/"
+>
+	<script slot="head" type="application/ld+json" is:inline set:html={websiteData} />
+	<HomeHero tags={heroTags} />
+	{spotlight && <ChallengeSpotlight challenge={spotlight} />}
+	{pickCards.length > 0 && (
+		<HomeSection id="picks" title="Staff picks">
+			<NotedCardGrid items={pickCards} eager={4} />
+		</HomeSection>
+	)}
+	{showTrending && (
+		<HomeSection id="trending" title="Trending">
+			<TrendingTabs cards={trendingCards} current={defaultPeriod(trendingCounts)} />
+		</HomeSection>
+	)}
+	{recordCards.length > 0 && (
+		<HomeSection id="records" title="Leaderboard" href="/leaderboard" hrefLabel="All records">
+			<NotedCardGrid items={recordCards} />
+		</HomeSection>
+	)}
+	{newestCards.length > 0 && (
+		<HomeSection
+			id="newest"
+			title="Newest uploads"
+			href="/browse?sort=created_at:desc"
+			hrefLabel="Browse all"
+		>
+			<EntryGrid cards={newestCards} headingLevel={3} eager={showTrending ? 0 : 4} />
+		</HomeSection>
+	)}
+</Page>

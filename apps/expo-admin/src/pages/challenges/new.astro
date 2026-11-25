@@ -1,0 +1,46 @@
+---
+// A new challenge, saved as a draft (publish it from its page). A failed
+// save renders the editor again with what was typed.
+import ChallengeEditor from "@components/ChallengeEditor.astro";
+import Outcome from "@components/Outcome.astro";
+import Console from "@layouts/Console.astro";
+import { failureMessage } from "@lib/api/actions";
+import { adminApi } from "@lib/api/client";
+import { loadFromApi } from "@lib/api/page";
+import type { ChallengeFields } from "@lib/api/types";
+import { editorValues, saveEditor } from "@lib/challenge-form";
+
+let saveError: string | undefined;
+let draft: ChallengeFields | undefined;
+if (Astro.request.method === "POST") {
+	let id = "";
+	const result = await saveEditor(
+		await Astro.request.formData(),
+		async (fields) => {
+			id = await adminApi(Astro.locals.staff.username).createChallenge(fields);
+		},
+		failureMessage,
+	);
+	if (!result.error) return Astro.redirect(`/challenges/${id}?notice=Draft+saved.`, 303);
+	saveError = result.error;
+	draft = result.draft;
+}
+
+const loaded = await loadFromApi(Astro, (api) => api.challengeParams());
+---
+
+<Console
+	title="New challenge"
+	nav="challenges"
+	description="Saved as a draft; publish it from its page."
+>
+	<Outcome loadError={loaded.error ?? saveError} />
+	{loaded.data && (
+		<ChallengeEditor
+			values={draft ?? editorValues()}
+			params={loaded.data}
+			started={false}
+			submitLabel="Save draft"
+		/>
+	)}
+</Console>

@@ -1,0 +1,177 @@
+---
+// Collapsible filter panel: tag/mod/entity/recipe/version/kind/size/type fields plus the
+// platform- and production-rate filter islands (shown per blueprint type).
+import IconPicker from "@factorio-expo/ui/game/icon-picker/IconPicker.astro";
+import type { FacetCounts, Modset, NodeKind, TagGroup } from "@lib/api";
+import type { SearchParams } from "@lib/search/query";
+import { costFilterIcons, productionFilterIcons } from "@lib/search/production-icons";
+import BlueprintTypeFilter from "./BlueprintTypeFilter.astro";
+import CostFilters from "./CostFilters.svelte";
+import DateRangeFilter from "./DateRangeFilter.astro";
+import FootprintFilter from "./FootprintFilter.astro";
+import KindFilter from "./KindFilter.astro";
+import ModFilter from "./ModFilter.astro";
+import PlatformFilters from "./PlatformFilters.svelte";
+import ProductionFilters from "./ProductionFilters.svelte";
+import TagFilter from "./TagFilter.astro";
+import VersionFilter from "./VersionFilter.astro";
+
+interface Props {
+	search: SearchParams;
+	tagGroups: TagGroup[];
+	tagsError: string | null;
+	modsets: Modset[];
+	modsetsError: string | null;
+	open: boolean;
+	/** Results per kind for the kind filter. */
+	kindCounts?: Partial<Record<NodeKind, number>>;
+	/** The other filters' counts, each without its own filter; absent without results. */
+	facetCounts?: FacetCounts;
+}
+
+const { search, tagGroups, tagsError, modsets, modsetsError, open, kindCounts, facetCounts } =
+	Astro.props;
+const productionIcons = productionFilterIcons(search.productionFilters);
+const costIcons = costFilterIcons(search.costFilters);
+---
+
+<details class="advanced-search" open={open}>
+	<summary>Advanced search</summary>
+	<div class="advanced-search-fields">
+		<TagFilter
+			tagGroups={tagGroups}
+			selected={search.tags}
+			error={tagsError}
+			counts={facetCounts?.tags}
+		/>
+		<ModFilter
+			modsets={modsets}
+			selected={search.mods}
+			error={modsetsError}
+			counts={facetCounts?.mods}
+		/>
+		<IconPicker
+			kind="entity"
+			label="Entities"
+			name="entities"
+			selected={search.entities}
+			quality={search.entityQuality}
+			qualityName="entity_quality"
+			placeholder="Any entity"
+			multiple
+			allowAny
+		/>
+		<IconPicker
+			kind="recipe"
+			label="Recipes"
+			name="recipes"
+			selected={search.recipes}
+			quality={search.recipeQuality}
+			qualityName="recipe_quality"
+			placeholder="Any recipe"
+			multiple
+			allowAny
+		/>
+		<VersionFilter selected={search.gameVersion} counts={facetCounts?.versions} />
+		<KindFilter selected={search.kinds} counts={kindCounts} />
+		<FootprintFilter width={search.footprintWidth} height={search.footprintHeight} />
+		<DateRangeFilter after={search.createdAfter} before={search.createdBefore} />
+		<BlueprintTypeFilter selected={search.blueprintType} counts={facetCounts?.platform} />
+		<div>
+			<label>
+				<input
+					type="checkbox"
+					name="spoiler"
+					value="hide"
+					checked={search.hideSpoilers}
+					data-hide-spoilers
+				/>
+				Hide spoiler/NSFW entries
+			</label>
+			<small>Otherwise their previews stay hidden until you reveal them.</small>
+		</div>
+	</div>
+	<hr />
+	<fieldset
+		data-type-filters="platforms"
+		hidden={search.blueprintType === "factories"}
+		disabled={search.blueprintType === "factories"}
+	>
+		<PlatformFilters filters={search.platformFilters} client:visible />
+		<hr />
+	</fieldset>
+	<fieldset
+		data-type-filters="factories"
+		hidden={search.blueprintType === "platforms"}
+		disabled={search.blueprintType === "platforms"}
+	>
+		<ProductionFilters
+			filters={search.productionFilters}
+			initialIcons={productionIcons}
+			client:visible
+		/>
+		<hr />
+	</fieldset>
+	<div class="cost-filters">
+		<CostFilters filters={search.costFilters} initialIcons={costIcons} client:visible />
+	</div>
+	<button type="submit" class="advanced-search-submit">
+		Search blueprints
+	</button>
+</details>
+
+<style>
+	.advanced-search {
+		display: block;
+		width: 100%;
+		box-sizing: border-box;
+		--pico-border-radius: 0.5rem;
+		margin: 1rem 0;
+		padding: 0.75rem 1rem;
+		border: 1px solid var(--pico-muted-border-color);
+	}
+
+	.advanced-search > summary {
+		color: var(--pico-primary);
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.advanced-search-fields {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+		gap: 1rem;
+		margin-top: 1rem;
+	}
+
+	.advanced-search-fields > :global(div) {
+		min-width: 0;
+		margin: 0;
+	}
+
+	[data-type-filters] {
+		margin: 0 0 1rem;
+		min-width: 0;
+	}
+	[data-type-filters][hidden] {
+		display: none;
+	}
+
+	.cost-filters {
+		margin: 0 0 1rem;
+	}
+
+	:global(#search-form .advanced-search-fields select),
+	:global(#search-form .advanced-search-fields input:not([type="checkbox"], [type="radio"])) {
+		flex: initial;
+		margin-left: 0;
+		border-radius: var(--pico-border-radius);
+	}
+
+	.advanced-search-submit {
+		width: 100%;
+		margin: 1.5rem 0 0;
+		padding-block: 1rem;
+		font-weight: 600;
+	}
+</style>

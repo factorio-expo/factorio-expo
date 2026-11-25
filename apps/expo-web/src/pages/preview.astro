@@ -1,0 +1,28 @@
+---
+import PreviewForm from "@components/preview/PreviewForm.astro";
+import Page from "@layouts/Page.astro";
+import { uploadPause } from "@lib/site-pause";
+import { getSiteStatus } from "@lib/site-status";
+import { allowGuestTurnstile } from "@lib/turnstile";
+import { getViewer } from "@lib/viewer";
+import { PUBLIC_TURNSTILE_SITE_KEY } from "astro:env/client";
+
+const signedIn = (await getViewer(Astro)).state === "in";
+const paused = uploadPause(await getSiteStatus(), signedIn);
+// A signed-out quick preview passes Turnstile.
+allowGuestTurnstile(Astro.csp, PUBLIC_TURNSTILE_SITE_KEY, signedIn);
+---
+
+<Page
+	title="Quick preview"
+	nav="preview"
+	description="Paste a Factorio blueprint string to render a temporary preview and production analysis without publishing it."
+>
+	<h1>Quick preview</h1>
+	<p>
+		Paste one blueprint to see its render and production analysis without publishing it. The
+		preview is unlisted and is deleted when it expires; signed in, you can publish it as an
+		entry instead. Blueprint books are not supported here: upload them.
+	</p>
+	<PreviewForm paused={paused} />
+</Page>

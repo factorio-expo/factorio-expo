@@ -1,0 +1,201 @@
+---
+// The leaderboard: record boards in two groups behind a small switch (links,
+// so it works without scripts and each group has its own URL). Ships: the
+// fastest, the best thrust-to-weight, the lightest and the most cargo, from
+// the analysis of public space platforms. Factories: the most science, the
+// densest and the cleanest science, the biggest power plant, from ground
+// builds. Each shown board: its top three as cards, places 4 to 10 behind a
+// disclosure. Boards still short of entries are one compact list at the end.
+import NotedCardGrid from "@components/entry/NotedCardGrid.astro";
+import Page from "@layouts/Page.astro";
+import { BOARD_GROUPS, boardGroupOf, formatRecordValue, heldFor } from "@lib/achievements";
+import type { Leaderboard } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server";
+import { entryPath, leafPath } from "@lib/entry-links";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { toCard } from "@utils/entry-card.ts";
+
+const PLACES = 10;
+const PODIUM = 3;
+const group = boardGroupOf(Astro.url.searchParams.get("group"));
+const { boards } = await getServerApiClient(Astro).leaderboards.list(PLACES);
+const inGroup = boards.filter((board) => board.group === group);
+const shown = inGroup.filter((board) => board.visible);
+const filling = inGroup.filter((board) => !board.visible);
+const groupHref = (value: string) =>
+	value === "ships" ? "/leaderboard" : `/leaderboard?group=${value}`;
+
+const placeHref = (place: Leaderboard["places"][number]) =>
+	place.card.book_title && place.card.node_id
+		? leafPath(place.card.entry_id, place.card.node_id)
+		: entryPath(place.card.entry_id);
+const intro =
+	group === "ships"
+		? "Space platforms that move, ranked by their analysis: theoretical values as designed, not measured in flight."
+		: "Ground builds (not space platforms) ranked by their analysis: theoretical rates of the machines as configured, not measured in a running factory.";
+---
+
+<Page
+	title="Leaderboard"
+	nav="leaderboard"
+	description="Factorio blueprint records: the fastest and lightest ships, the most cargo, and the factories with the most, densest and cleanest science and the biggest power plants, from real game analysis."
+	canonicalPath={groupHref(group)}
+>
+	<h1>Leaderboard</h1>
+	<nav class="group-switch" aria-label="Leaderboard group">
+		{BOARD_GROUPS.map((option) => (
+			<a
+				href={groupHref(option.value)}
+				aria-current={option.value === group ? "page" : undefined}
+			>
+				{option.label}
+			</a>
+		))}
+	</nav>
+	<p class="intro">
+		{intro} Only complete analyses with no mods beyond Space Age rank, one place per entry. A
+		board shows once enough entries rank on it.
+	</p>
+	{shown.map((board) => (
+		<section class="board" aria-labelledby={`board-${board.board}`} data-board={board.board}>
+			<header>
+				<h2 id={`board-${board.board}`}>{board.title}</h2>
+				<p class="wins">{board.description}</p>
+				<small>
+					{board.lower_wins ? "Lowest" : "Highest"} {board.unit} first
+					{board.leader_since && ` · record held ${heldFor(board.leader_since)}`}
+				</small>
+			</header>
+			<NotedCardGrid
+				items={board.places.slice(0, PODIUM).map((place) => ({
+					card: toCard(place.card),
+					label: `#${place.rank}`,
+					note: formatRecordValue(place.value, board.unit),
+				}))}
+			/>
+			{board.places.length > PODIUM && (
+				<details class="more">
+					<summary>
+						Places {PODIUM + 1} to {board.places.length}
+					</summary>
+					<ol class="places" start={PODIUM + 1}>
+						{board.places.slice(PODIUM).map((place) => (
+							<li value={place.rank}>
+								<a href={placeHref(place)}>
+									{stripRichText(place.card.title) || "Untitled blueprint"}
+								</a>
+								{place.card.owner_username && (
+									<span class="by"> by {place.card.owner_username}</span>
+								)}
+								<span class="value">
+									{formatRecordValue(place.value, board.unit)}
+								</span>
+							</li>
+						))}
+					</ol>
+				</details>
+			)}
+		</section>
+	))}
+	{shown.length === 0 && (
+		<p class="empty">
+			No board in this group has enough entries yet. Upload yours to open one.
+		</p>
+	)}
+	{filling.length > 0 && (
+		<section class="filling" aria-labelledby="filling">
+			<h2 id="filling">Still filling up</h2>
+			<ul>
+				{filling.map((board) => (
+					<li data-board-hidden data-board={board.board}>
+						<strong>{board.title}</strong>: {board.description}{" "}
+						<span class="count">
+							{board.eligible} of {board.min_entries} entries so far.
+						</span>
+					</li>
+				))}
+			</ul>
+		</section>
+	)}
+</Page>
+
+<style>
+	.group-switch {
+		display: inline-flex;
+		gap: 0.15rem;
+		margin-bottom: 1rem;
+		padding: 0.2rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: 2rem;
+		background: var(--pico-card-background-color);
+	}
+	.group-switch a {
+		padding: 0.25rem 1rem;
+		border-radius: 2rem;
+		color: var(--pico-muted-color);
+		font-size: 0.9rem;
+		text-decoration: none;
+		transition: background-color 0.15s;
+	}
+	.group-switch a:hover,
+	.group-switch a:focus-visible {
+		background: color-mix(in srgb, var(--pico-primary) 12%, transparent);
+	}
+	.group-switch a[aria-current="page"] {
+		background: var(--pico-primary-focus);
+		color: var(--pico-primary);
+		font-weight: 600;
+	}
+	.intro {
+		max-width: 48rem;
+	}
+	.board {
+		margin-bottom: 2.5rem;
+	}
+	.board header {
+		margin-bottom: 1rem;
+	}
+	.board h2 {
+		margin: 0;
+		font-size: 1.4rem;
+	}
+	.wins {
+		margin: 0.15rem 0 0;
+	}
+	.board small,
+	.empty,
+	.by,
+	.count {
+		color: var(--pico-muted-color);
+	}
+	.more {
+		margin: 1rem 0 0;
+	}
+	.more summary {
+		font-weight: 600;
+	}
+	.places {
+		margin: 0.5rem 0 0;
+		padding-left: 2.5rem;
+	}
+	.places li {
+		padding: 0.35rem 0;
+		border-bottom: 1px solid var(--pico-muted-border-color);
+		overflow-wrap: anywhere;
+	}
+	.value {
+		float: right;
+		margin-left: 0.5rem;
+		font-variant-numeric: tabular-nums;
+		font-weight: 600;
+	}
+	.filling h2 {
+		font-size: 1.1rem;
+	}
+	.filling ul {
+		padding-left: 1.2rem;
+	}
+	.filling li {
+		margin-bottom: 0.35rem;
+	}
+</style>

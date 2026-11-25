@@ -1,0 +1,16 @@
+---
+// The line under a form that queues renders: it links the terms and the fair
+// use policy the "too many waiting" refusal (lib/render-queue.ts) refers to.
+interface Props {
+	/** What the form does, as in "By uploading you agree...". */
+	verb: string;
+}
+const { verb } = Astro.props;
+---
+
+<p class="terms-note">
+	<small>
+		By {verb} you agree to the <a href="/terms-of-use">terms of use</a> and the{" "}
+		<a href="/terms-of-use#fair-use">fair use policy</a>.
+	</small>
+</p>
