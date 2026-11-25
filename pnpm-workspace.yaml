@@ -15,10 +15,10 @@ catalog:
     "@astrojs/node": ^11.1.13
     "@astrojs/svelte": ^9.1.6
     astro: ^7.4.12
-    svelte: ^5.57.3
+    svelte: ^5.58.0
     # Icons and styles (lucide pinned: icon names change between minors)
-    "@lucide/astro": 1.74.0
-    "@lucide/svelte": 1.74.0
+    "@lucide/astro": 1.75.0
+    "@lucide/svelte": 1.75.0
     "@picocss/pico": ^2.1.1
     sass: ^1.108.2
     # Type checking: `astro check` still needs the TypeScript 6 API.
@@ -34,7 +34,7 @@ catalog:
     # Sign-in JWT verification (expo-admin)
     jose: ^6.2.17
     # Tests
-    vitest: ^5.1.0
+    vitest: ^5.1.1
 
 allowBuilds:
     "@parcel/watcher": true

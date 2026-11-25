@@ -36,7 +36,7 @@
 		"@astrojs/check": "catalog:",
 		"@astrojs/compiler-rs": "catalog:",
 		"@factorio-expo/api-types": "workspace:*",
-		"@redocly/cli": "^2.79.0",
+		"@redocly/cli": "^2.80.0",
 		"@types/sanitize-html": "^2.16.2",
 		"@typescript/typescript6": "catalog:",
 		"browserslist": "^4.29.6",
