@@ -1,4 +1,4 @@
-FROM debian:trixie-20261020-slim
+FROM debian:trixie-20261104-slim
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app
 COPY factorio/factorio-server/config.ini /app/config.ini

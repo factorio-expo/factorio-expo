@@ -6,7 +6,7 @@ COPY internal ./internal
 COPY apps/expo-game-data ./apps/expo-game-data
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/expo-game-data ./apps/expo-game-data/cmd/expo-game-data
 
-FROM debian:trixie-20261020-slim
+FROM debian:trixie-20261104-slim
 
 RUN apt-get update \
     && apt-get upgrade -y \

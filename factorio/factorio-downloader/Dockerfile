@@ -1,4 +1,4 @@
-FROM debian:trixie-20261020-slim
+FROM debian:trixie-20261104-slim
 
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl tar xz-utils ca-certificates \

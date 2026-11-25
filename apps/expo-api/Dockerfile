@@ -1,7 +1,7 @@
 # cwebp, libwebp's encoder, as one static binary (no libpng/libjpeg: the API
 # pipes it a PPM), so it runs on distroless next to the API. Built from the
 # release tarball pinned by checksum; bump both together.
-FROM debian:trixie-20261020-slim AS cwebp
+FROM debian:trixie-20261104-slim AS cwebp
 ARG LIBWEBP_VERSION=1.6.0
 ARG LIBWEBP_SHA256=e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564
 RUN apt-get update && \
