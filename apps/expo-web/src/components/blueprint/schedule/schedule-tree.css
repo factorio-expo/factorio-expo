@@ -1,0 +1,118 @@
+/* Shared look for schedule stops, interrupts and their conditions. */
+
+/* Conditions, as in game: full-width rows, connectors in a left gutter (with
+   both kinds, AND in the inner column and OR in the outer one). */
+.st-conds {
+	display: grid;
+	grid-template-columns: 2.6rem minmax(0, 1fr);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.st-conds[data-both] {
+	grid-template-columns: 2.4rem 2.6rem minmax(0, 1fr);
+}
+
+.st-conds > li {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.st-row {
+	grid-column: -2;
+}
+
+/* A connector: a small box between two rows, overlapping their edges. */
+.st-join {
+	grid-column: 1;
+	display: flex;
+	justify-content: center;
+	height: 0.9rem;
+	margin: -0.2rem 0;
+	position: relative;
+	z-index: 1;
+}
+
+.st-conds[data-both] > .st-join[data-join="and"] {
+	grid-column: 2;
+}
+
+.st-join span {
+	align-self: center;
+	padding: 0 0.35rem;
+	border-radius: 0.25rem;
+	background: var(--pico-muted-border-color);
+	color: var(--pico-color);
+	font-size: 0.65rem;
+	font-weight: 700;
+	line-height: 1.2rem;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.st-join[data-join="or"] span {
+	background: var(--pico-primary-background);
+	color: var(--pico-primary-inverse);
+}
+
+/* Rows of one AND group sit close; an OR leaves a little air. */
+.st-join[data-join="or"] {
+	margin: 0.1rem 0;
+}
+
+.st-cond {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.3rem;
+	min-height: 2rem;
+	padding: 0.2rem 0.6rem;
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: var(--pico-border-radius);
+	background: var(--pico-card-sectioning-background-color, var(--pico-background-color));
+	font-size: 0.85rem;
+}
+
+.st-cond strong {
+	font-variant-numeric: tabular-nums;
+}
+
+.st-cmp {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+}
+
+.st-none {
+	margin: 0;
+	color: var(--pico-muted-color);
+	font-size: 0.85rem;
+}
+
+/* A small outlined note beside a name (temporary, no unloading, ...). */
+.st-tag {
+	padding: 0 0.45rem;
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: 1rem;
+	color: var(--pico-muted-color);
+	font-size: 0.7rem;
+	font-weight: 400;
+	white-space: nowrap;
+}
+
+/* Small uppercase section label (Stops, Interrupts, When, Go to). */
+.st-label {
+	margin: 0 0 0.25rem;
+	color: var(--pico-muted-color);
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.st-label small {
+	margin-left: 0.25rem;
+	font-weight: 400;
+}

@@ -1,0 +1,59 @@
+---
+// The username step after a provider sign-in that matched no account. The
+// pending sign-up lives in an HttpOnly cookie only the API reads, so
+// signup.ts asks the API for it. Behaviour in signup.ts. With Turnstile on
+// (lib/turnstile.ts) the form runs its human check before the button.
+import { PUBLIC_TURNSTILE_SITE_KEY } from "astro:env/client";
+---
+
+<form data-signup novalidate>
+	<p data-signup-intro aria-busy="true">
+		Loading your sign-in...
+	</p>
+	<fieldset data-signup-fields disabled>
+		<label for="signup-name">Username</label>
+		<input
+			id="signup-name"
+			name="username"
+			autocomplete="off"
+			required
+			minlength="3"
+			maxlength="32"
+			pattern="[A-Za-z0-9_\-]{3,32}"
+			aria-describedby="signup-name-help"
+		/>
+		<small id="signup-name-help">3-32 letters, digits, _ or -. Shown on your uploads.</small>
+		{PUBLIC_TURNSTILE_SITE_KEY && (
+			<div
+				class="human-check"
+				data-turnstile
+				data-sitekey={PUBLIC_TURNSTILE_SITE_KEY}
+				data-action="signup-provider"
+			/>
+		)}
+		<button type="submit">Create account</button>
+	</fieldset>
+	<p data-signup-status role="alert" aria-live="polite"></p>
+</form>
+<p data-signup-missing hidden>
+	No sign-up is waiting here (it lasts 10 minutes). <a href="/login">Log in</a> to start again.
+</p>
+
+<script>
+	import "./signup.ts";
+</script>
+
+<style>
+	.human-check {
+		margin-bottom: var(--pico-spacing);
+	}
+	form {
+		max-width: 26rem;
+	}
+	[data-signup-status]:empty {
+		margin: 0;
+	}
+	[data-signup-status] {
+		color: var(--pico-del-color);
+	}
+</style>

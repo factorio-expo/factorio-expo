@@ -1,0 +1,48 @@
+---
+// The "ban the reporter from reporting" form shared by the entry and problem
+// report pages; its post is read by `banReporterInput` (lib/bans.ts).
+import { banReasons, MAX_BAN_DAYS, reasonLabel } from "@lib/bans";
+
+interface Props {
+	reportId: string;
+	anonymous: boolean;
+	/** The submit button's text. */
+	label: string;
+	/** What the ban covers for a signed-in reporter, after "banned from reporting". */
+	scope: string;
+	small?: boolean;
+}
+const { reportId, anonymous, label, scope, small } = Astro.props;
+---
+
+<form method="post" class="actions">
+	<input type="hidden" name="report_id" value={reportId} />
+	<input type="hidden" name="action" value="ban-reporter" />
+	<select name="reason_code" aria-label="Ban reason" required>
+		{banReasons.map((code) => (
+			<option value={code}>{reasonLabel(code)}</option>
+		))}
+	</select>
+	{anonymous ? (
+		<input type="hidden" name="days" value="1" />
+	) : (
+		<input
+			type="number"
+			name="days"
+			min="1"
+			max={MAX_BAN_DAYS}
+			value="7"
+			aria-label="Days"
+			required
+		/>
+	)}
+	<input type="text" name="reason" placeholder="Note (optional)" maxlength="500" />
+	<button type="submit" class={small ? "secondary small" : "secondary"}>
+		{label}
+	</button>
+</form>
+<small class="muted">
+	{anonymous
+		? "An anonymous reporter's address is banned from reporting for a few hours."
+		: `The account is banned from reporting ${scope} for the days given.`}
+</small>

@@ -1,0 +1,188 @@
+---
+// An entry's comment thread (one per entry, shared by its leaves and
+// revisions): the page of comments the URL asks for (`comments_after` /
+// `comments_before`), paging links, the new-comment form or why the viewer
+// cannot post, and the report dialog. The list is a live region, refreshed in
+// place after a change (comments.ts); the form stays outside it.
+import { LIVE_REGIONS } from "@lib/live-regions";
+import IconPicker from "@factorio-expo/ui/game/icon-picker/IconPicker.astro";
+import MarkdownEditor from "@factorio-expo/ui/forms/markdown-editor/MarkdownEditor.astro";
+import ModalDialog from "@components/common/ModalDialog.astro";
+import type { CommentPage } from "@lib/api";
+import { loginPath } from "@lib/safe-next";
+import { COMMENTS_PAUSED } from "@lib/site-pause";
+import { getSiteStatus } from "@lib/site-status";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import CommentItem from "./CommentItem.astro";
+
+interface Props {
+	entryId: string;
+	page: CommentPage;
+	signedIn: boolean;
+	/** The revision the page shows (the picker's choice); new comments refer to it. */
+	revisionId?: string;
+}
+const { entryId, page, signedIn, revisionId } = Astro.props;
+const { viewer } = page;
+
+// Links within the thread keep the page's own query (edit token, revision).
+const pageHref = (
+	param: "comments_after" | "comments_before" | null,
+	value = 0,
+	hash = "comments",
+) => {
+	const url = new URL(Astro.url);
+	url.searchParams.delete("comments_after");
+	url.searchParams.delete("comments_before");
+	if (param) url.searchParams.set(param, String(value));
+	return `${url.pathname}${url.search}#${hash}`;
+};
+const onPage = new Set(page.comments.map((comment) => comment.number));
+const refHref = (number: number) => {
+	if (onPage.has(number)) return `#c-${number}`;
+	if (number < page.first_number || number > page.last_number) return null;
+	return pageHref("comments_after", number - 1, `c-${number}`);
+};
+const first = page.comments[0]?.number ?? 0;
+const last = page.comments.at(-1)?.number ?? 0;
+const banReason = viewer.ban?.reason_code.replaceAll("_", " ");
+const commentsPaused = !(await getSiteStatus()).comments;
+// When the viewer's comment ban ends. The note ends on the date with no period:
+// the formatter puts it on its own line, which would render as " .".
+const banEnd = viewer.ban?.expires_at;
+---
+
+<section id="comments" class="comment-thread" data-comment-thread data-entry-id={entryId}>
+	<h2>Comments {page.total > 0 && <small>({page.total})</small>}</h2>
+	{viewer.blocked === "closed" ? (
+		<p class="comment-note">Comments are only open on public entries.</p>
+	) : (
+		<>
+			<div
+				data-live-region={LIVE_REGIONS.comments}
+				data-comment-list
+				data-has-newer={String(page.has_newer)}
+			>
+				{page.has_older && (
+					<a class="comment-paging" href={pageHref("comments_before", first)}>
+						Older comments
+					</a>
+				)}
+				{page.comments.length === 0 && !page.has_older && !page.has_newer && (
+					<p class="comment-note">No comments yet.</p>
+				)}
+				<ol class="comment-list">
+					{page.comments.map((comment) => (
+						<CommentItem comment={comment} signedIn={signedIn} refHref={refHref} />
+					))}
+				</ol>
+				{page.has_newer && (
+					<a class="comment-paging" href={pageHref("comments_after", last)}>
+						Newer comments
+					</a>
+				)}
+			</div>
+			{viewer.can_comment && commentsPaused ? (
+				<p class="comment-note" data-comments-paused>
+					{COMMENTS_PAUSED}
+				</p>
+			) : viewer.can_comment ? (
+				<form class="comment-form" data-comment-form data-revision-id={revisionId}>
+					<IconPicker targetId="comment-body">
+						<label slot="label" for="comment-body">
+							Add a comment{" "}
+							<small>
+								(Markdown, icons like [item=iron-ore], #N links a comment)
+							</small>
+						</label>
+						<MarkdownEditor id="comment-body" name="body" maxlength={4000} rows={4} />
+					</IconPicker>
+					<button type="submit">Post comment</button>
+					<p data-comment-form-status role="status" aria-live="polite"></p>
+				</form>
+			) : viewer.blocked === "banned" ? (
+				<p class="comment-note" data-comment-banned>
+					You are banned from commenting
+					{banReason && <> (reason: {banReason})</>}
+					{banEnd ? (
+						<>
+							{" "}
+							until{" "}
+							<time datetime={banEnd} data-local="datetime">
+								{isoDateTime(banEnd)}
+							</time>
+						</>
+					) : (
+						" permanently"
+					)}
+				</p>
+			) : (
+				<p class="comment-note">
+					<a href={loginPath(Astro.url.pathname + Astro.url.search)}>Log in</a> to
+					comment.
+				</p>
+			)}
+			{signedIn && (
+				<ModalDialog
+					titleId={`comment-report-${entryId}`}
+					title="Report comment"
+					closeLabel="Close"
+				>
+					<form data-comment-report-form>
+						<fieldset>
+							<legend>Why should a moderator look at it?</legend>
+							<label>
+								<input type="radio" name="reason" value="spam" required /> Spam
+							</label>
+							<label>
+								<input type="radio" name="reason" value="abuse" /> Abusive or
+								offensive
+							</label>
+							<label>
+								<input type="radio" name="reason" value="off_topic" /> Off topic
+							</label>
+							<label>
+								<input type="radio" name="reason" value="other" /> Something else
+							</label>
+						</fieldset>
+						<label>
+							Note <small>(optional)</small>
+							<textarea name="note" rows="3" maxlength="500"></textarea>
+						</label>
+						<button type="submit">Send report</button>
+						<p data-comment-report-status role="status" aria-live="polite"></p>
+					</form>
+				</ModalDialog>
+			)}
+		</>
+	)}
+</section>
+
+<script>
+	import "./comments.ts";
+</script>
+
+<style>
+	.comment-thread {
+		margin-top: 2.5rem;
+		scroll-margin-top: 5rem;
+	}
+	.comment-thread h2 small {
+		color: var(--pico-muted-color);
+		font-weight: normal;
+	}
+	.comment-list {
+		margin: 0 0 1rem;
+		padding: 0;
+	}
+	.comment-paging {
+		display: inline-block;
+		margin: 0.5rem 0;
+	}
+	.comment-note {
+		color: var(--pico-muted-color);
+	}
+	.comment-form {
+		margin-top: 1rem;
+	}
+</style>

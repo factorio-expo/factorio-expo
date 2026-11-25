@@ -1,0 +1,44 @@
+---
+import SubmissionForm from "@components/submission/SubmissionForm.astro";
+import Page from "@layouts/Page.astro";
+import { type TagGroup } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server";
+import { uploadPause } from "@lib/site-pause";
+import { getSiteStatus } from "@lib/site-status";
+import { allowGuestTurnstile } from "@lib/turnstile";
+import { getViewer } from "@lib/viewer";
+import { PUBLIC_TURNSTILE_SITE_KEY } from "astro:env/client";
+
+const viewer = await getViewer(Astro);
+const signedIn = viewer.state === "in";
+const paused = uploadPause(await getSiteStatus(), signedIn);
+// A signed-out upload passes Turnstile.
+allowGuestTurnstile(Astro.csp, PUBLIC_TURNSTILE_SITE_KEY, signedIn);
+let tagGroups: TagGroup[] = [];
+let tagError: string | null = null;
+try {
+	const response = await getServerApiClient(Astro).tags.list();
+	tagGroups = response.groups;
+} catch {
+	tagError = "Tags are temporarily unavailable.";
+}
+---
+
+<Page
+	title="Upload"
+	nav="upload"
+	description="Upload a Factorio blueprint or blueprint book, no account needed. Get a shareable link, rendered previews and production analysis."
+>
+	<h1>Upload a blueprint</h1>
+	<p>
+		Entry details are separate from the names and descriptions stored inside the blueprint or
+		book.
+	</p>
+	{tagError && <p role="alert">Tag options could not be loaded: {tagError}</p>}
+	<SubmissionForm
+		tagGroups={tagGroups}
+		signedIn={signedIn}
+		username={viewer.state === "in" ? viewer.user.username : undefined}
+		paused={paused}
+	/>
+</Page>

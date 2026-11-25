@@ -1,0 +1,48 @@
+---
+// Upload date range: entries created from one UTC day through another, both
+// ends included. Either bound alone works. Dates are submitted as
+// YYYY-MM-DD (the API's created_after / created_before).
+interface Props {
+	after: string;
+	before: string;
+}
+
+const { after, before } = Astro.props;
+---
+
+<fieldset class="date-range-filter">
+	<legend>Uploaded between (UTC)</legend>
+	<div class="bounds">
+		<input type="date" name="created_after" aria-label="Uploaded on or after" value={after} />
+		<span aria-hidden="true">–</span>
+		<input
+			type="date"
+			name="created_before"
+			aria-label="Uploaded on or before"
+			value={before}
+		/>
+	</div>
+</fieldset>
+
+<style>
+	.date-range-filter {
+		margin: 0;
+		min-width: 0;
+	}
+	.date-range-filter legend {
+		margin-bottom: 0.5rem;
+	}
+	.bounds {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.bounds input {
+		flex: 1;
+		min-width: 0;
+		margin: 0;
+	}
+	.bounds span {
+		color: var(--pico-muted-color);
+	}
+</style>

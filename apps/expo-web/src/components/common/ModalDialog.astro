@@ -1,0 +1,135 @@
+---
+// Modal shell shared by the revision and collection pickers: title, close
+// button (`data-dialog-close`, wired by lib/dialog.ts) and a scrollable body.
+import Maximize2 from "@lucide/astro/icons/maximize-2";
+import Minimize2 from "@lucide/astro/icons/minimize-2";
+import X from "@lucide/astro/icons/x";
+
+interface Props {
+	/** Adds a button that stretches the dialog over the page (not browser fullscreen). */
+	maximizable?: boolean;
+	titleId: string;
+	title: string;
+	closeLabel: string;
+	/** CSS max-width of the dialog content. */
+	width?: string;
+	/** Let a popup (the icon picker) hang out of the dialog instead of scrolling inside it. */
+	overhang?: boolean;
+}
+const {
+	titleId,
+	title,
+	closeLabel,
+	width = "32rem",
+	overhang = false,
+	maximizable = false,
+} = Astro.props;
+---
+
+<dialog
+	aria-labelledby={titleId}
+	style={`--dialog-width:${width}`}
+	data-overhang={overhang ? "" : undefined}
+>
+	<article>
+		<header>
+			<h2 id={titleId}>{title}</h2>
+			<div class="header-buttons">
+				{maximizable && (
+					<button
+						type="button"
+						class="icon-button"
+						data-dialog-maximize
+						aria-pressed="false"
+						aria-label="Maximize"
+						data-tooltip="Maximize"
+						data-placement="left"
+					>
+						<Maximize2 class="when-normal" aria-hidden="true" />
+						<Minimize2 class="when-maximized" aria-hidden="true" />
+					</button>
+				)}
+				<button
+					type="button"
+					class="icon-button"
+					data-dialog-close
+					aria-label={closeLabel}
+					data-tooltip={closeLabel}
+					data-placement="left"
+				>
+					<X aria-hidden="true" />
+				</button>
+			</div>
+		</header>
+		<slot />
+	</article>
+</dialog>
+
+<script>
+	// One delegated listener for every maximizable dialog on the page.
+	document.addEventListener("click", (event) => {
+		const button = (event.target as Element).closest<HTMLButtonElement>(
+			"[data-dialog-maximize]",
+		);
+		const dialog = button?.closest("dialog");
+		if (!button || !dialog) return;
+		const on = dialog.toggleAttribute("data-maximized");
+		button.setAttribute("aria-pressed", String(on));
+		const label = on ? "Restore size" : "Maximize";
+		button.setAttribute("aria-label", label);
+		button.setAttribute("data-tooltip", label);
+	});
+</script>
+
+<style>
+	dialog article {
+		max-width: var(--dialog-width);
+		max-height: 80vh;
+		overflow-y: auto;
+	}
+	dialog[data-overhang] article {
+		max-height: none;
+		overflow: visible;
+	}
+	header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	header h2 {
+		margin: 0;
+	}
+	dialog[data-maximized] article {
+		width: 100%;
+		max-width: none;
+		height: calc(100dvh - 2 * var(--pico-spacing, 1rem));
+		max-height: none;
+	}
+	.header-buttons {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+	:global(.when-maximized),
+	dialog[data-maximized] :global(.when-normal) {
+		display: none;
+	}
+	dialog[data-maximized] :global(.when-maximized) {
+		display: block;
+	}
+	header button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: 0 0 auto;
+		width: 2.75rem;
+		height: 2.75rem;
+		padding: 0;
+		margin: 0;
+	}
+	header button :global(svg) {
+		width: 1.15rem;
+		height: 1.15rem;
+	}
+</style>

@@ -1,0 +1,27 @@
+{
+	"name": "factorio-expo",
+	"private": true,
+	"description": "pnpm workspace root: apps/expo-web, apps/expo-admin, packages/expo-ui, packages/expo-api-types, e2e. Holds the shared lint/format tooling and its configs.",
+	"type": "module",
+	"scripts": {
+		"build": "pnpm --filter expo-web --filter expo-admin build",
+		"test": "pnpm -r --filter !expo-e2e test",
+		"check": "pnpm lint:check && pnpm format:check && pnpm -r typecheck",
+		"lint": "pnpm -r lint",
+		"lint:check": "pnpm -r lint:check",
+		"format": "oxfmt --write .",
+		"format:check": "oxfmt --check ."
+	},
+	"devDependencies": {
+		"@commitlint/cli": "^21.2.4",
+		"@commitlint/config-conventional": "^21.2.4",
+		"lefthook": "^2.2.2",
+		"oxfmt": "^0.79.0",
+		"oxlint": "^1.94.0",
+		"oxlint-tsgolint": "^7.0.2007"
+	},
+	"engines": {
+		"node": ">=26"
+	},
+	"packageManager": "pnpm@12.21.0"
+}

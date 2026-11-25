@@ -1,0 +1,55 @@
+# Git hooks (https://lefthook.dev). `pnpm install` at the repository root
+# installs them; `pnpm exec lefthook install` reinstalls them by hand.
+# Skip once with `LEFTHOOK=0 git commit ...` (or `git commit --no-verify`).
+
+pre-commit:
+    parallel: true
+    jobs:
+        - name: gofmt
+          glob: "*.go"
+          run: sh .lefthook/gofmt-check.sh {staged_files}
+
+        - name: go fix
+          glob: "*.go"
+          run: sh .lefthook/gofix-check.sh {staged_files}
+
+        - name: go vet
+          glob: "*.go"
+          run: go vet ./...
+
+        - name: oxfmt
+          glob: "*.{js,mjs,cjs,ts,mts,cts,jsx,tsx,json,jsonc,css,scss,svelte,astro}"
+          run: pnpm exec oxfmt --check --no-error-on-unmatched-pattern {staged_files}
+
+        # oxlint runs from each package so its own .oxlintrc.json and tsconfig apply.
+        - name: oxlint expo-web
+          root: apps/expo-web/
+          glob: "*.{js,mjs,cjs,ts,mts,cts,jsx,tsx,svelte,astro}"
+          run: pnpm exec oxlint {staged_files}
+        - name: oxlint expo-admin
+          root: apps/expo-admin/
+          glob: "*.{js,mjs,cjs,ts,mts,cts,jsx,tsx,svelte,astro}"
+          run: pnpm exec oxlint {staged_files}
+        - name: oxlint expo-ui
+          root: packages/expo-ui/
+          glob: "*.{js,mjs,cjs,ts,mts,cts,jsx,tsx,svelte,astro}"
+          run: pnpm exec oxlint {staged_files}
+        - name: oxlint expo-api-types
+          root: packages/expo-api-types/
+          glob: "*.{js,mjs,cjs,ts,mts,cts,jsx,tsx,svelte,astro}"
+          run: pnpm exec oxlint {staged_files}
+        - name: oxlint e2e
+          root: e2e/
+          glob: "*.{js,mjs,cjs,ts,mts,cts,jsx,tsx,svelte,astro}"
+          run: pnpm exec oxlint {staged_files}
+
+commit-msg:
+    jobs:
+        - name: commitlint
+          run: pnpm exec commitlint --edit {1}
+
+pre-push:
+    jobs:
+        - name: protect master
+          use_stdin: true
+          run: sh .lefthook/protect-master.sh

@@ -1,0 +1,122 @@
+---
+// A profile's pinned entries, large, above the entry list and set apart from
+// the list by an accent on each card and a rule below. The grid and the heading's count are
+// live regions ("pins", "pins-count"): pin buttons anywhere on the page
+// re-render them. Visitors see the section only when something is pinned; the
+// owner always, with what pinning does when it is empty, and the "Arrange"
+// dialog (PinArranger.svelte) to reorder and unpin.
+import { LIVE_REGIONS } from "@lib/live-regions";
+import ArrowUpDown from "@lucide/astro/icons/arrow-up-down";
+import ModalDialog from "@components/common/ModalDialog.astro";
+import EntryGrid from "@components/entry/EntryGrid.astro";
+import type { EntrySummary } from "@lib/api";
+import { toCard } from "@utils/entry-card.ts";
+import PinArranger from "./PinArranger.svelte";
+
+interface Props {
+	username: string;
+	pins: EntrySummary[];
+	/** The viewer is the profile's owner. */
+	owner: boolean;
+	/** The most pins a profile holds (shown to the owner). */
+	max: number;
+}
+const { username, pins, owner, max } = Astro.props;
+---
+
+{(pins.length > 0 || owner) && (
+	<section class="pins" aria-labelledby="pins-heading">
+		<header>
+			<h2 id="pins-heading">
+				Pinned{" "}
+				<small data-live-region={LIVE_REGIONS.pinsCount}>
+					{pins.length}
+					{owner && ` of ${max}`}
+				</small>
+			</h2>
+			{owner && (
+				<button
+					type="button"
+					class="secondary outline arrange"
+					data-pins-arrange
+					aria-haspopup="dialog"
+				>
+					<ArrowUpDown aria-hidden="true" />
+					Arrange
+				</button>
+			)}
+		</header>
+		<div data-live-region={LIVE_REGIONS.pins}>
+			{pins.length > 0 ? (
+				<EntryGrid cards={pins.map((pin) => toCard(pin))} pinnable={owner} eager={3} />
+			) : (
+				<p class="empty">
+					Nothing pinned yet. Pin up to {max} of your public entries with the pin button
+					on their cards below, on their entry pages or in My entries; they show here,
+					large, in the order you choose.
+				</p>
+			)}
+		</div>
+	</section>
+)}
+
+{owner && (
+	<div data-pins-dialog-root>
+		<ModalDialog titleId="pins-dialog-title" title="Arrange pinned entries" closeLabel="Close">
+			<PinArranger username={username} client:only="svelte" />
+		</ModalDialog>
+	</div>
+)}
+
+<script>
+	import { bindPinsDialog } from "./pins.ts";
+	bindPinsDialog();
+</script>
+
+<style>
+	.pins {
+		margin-bottom: 2rem;
+		padding-bottom: 2rem;
+		border-bottom: 1px solid var(--pico-muted-border-color);
+	}
+	h2 small {
+		color: var(--pico-muted-color);
+		font-weight: normal;
+	}
+	/* Pinned cards carry an accent along their top edge. */
+	.pins :global(.entry-card) {
+		border-top: 3px solid var(--pin-accent, #e0a800);
+	}
+	header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 0.75rem;
+	}
+	h2 {
+		margin: 0;
+	}
+	.arrange {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		width: auto;
+		margin: 0;
+		padding: 0.35rem 0.75rem;
+	}
+	.arrange :global(svg) {
+		width: 1rem;
+		height: 1rem;
+	}
+	.pins :global(.grid) {
+		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+	}
+	.empty {
+		margin: 0;
+		padding: 1.25rem;
+		border: 1px dashed var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+		color: var(--pico-muted-color);
+	}
+</style>

@@ -1,0 +1,53 @@
+# The JavaScript workspace: expo-web, expo-admin, the shared expo-ui package
+# and the e2e tests, with one lockfile (pnpm-lock.yaml). `pnpm install` at the
+# repository root installs all of them.
+packages:
+    - apps/expo-web
+    - apps/expo-admin
+    - packages/expo-ui
+    - packages/expo-api-types
+    - e2e
+
+# One version of every dependency used by more than one package: members
+# depend on it as "catalog:". Bump a version here, then `pnpm install`.
+catalog:
+    # Framework
+    "@astrojs/node": ^11.1.13
+    "@astrojs/svelte": ^9.1.6
+    astro: ^7.4.12
+    svelte: ^5.57.3
+    # Icons and styles (lucide pinned: icon names change between minors)
+    "@lucide/astro": 1.74.0
+    "@lucide/svelte": 1.74.0
+    "@picocss/pico": ^2.1.1
+    sass: ^1.108.2
+    # Type checking: `astro check` still needs the TypeScript 6 API.
+    "@astrojs/check": ^0.9.12
+    "@astrojs/compiler-rs": ^0.5.3
+    "@types/node": ^26.6.6
+    "@typescript/typescript6": npm:typescript@^7.0.2
+    typescript: ^7.0.2
+    # HTTP client for the generated API types
+    openapi-fetch: ^0.17.0
+    # Dates (Temporal where the runtime lacks it)
+    temporal-polyfill: ^1.0.8
+    # Sign-in JWT verification (expo-admin)
+    jose: ^6.2.17
+    # Tests
+    vitest: ^5.1.0
+
+allowBuilds:
+    "@parcel/watcher": true
+    esbuild: true
+    lefthook: true
+
+minimumReleaseAgeExclude:
+    - "@astrojs/internal-helpers@0.13.2"
+    - "@astrojs/markdown-satteri@0.4.8"
+    - "@astrojs/node@11.1.12"
+    - "@astrojs/runtime@0.1.0"
+    - "@astrojs/vite-plugin-astro@0.1.1"
+    - "@astrojs/svelte-renderer@0.1.0"
+    - astro@7.4.10
+    - marked@18.2.0
+    - "@astrojs/svelte@9.1.4"

@@ -1,0 +1,178 @@
+---
+// The viewer's entry in an open challenge: their entry card with its score or
+// why it is not ranked, a way to change or withdraw it, and a searchable
+// picker over their public single blueprints (filled by challenge-picker.ts)
+// or an upload of a new one.
+import EntryCard from "@components/entry/EntryCard.astro";
+import type { ChallengeEntry, ChallengeViewer } from "@lib/api";
+import { toCard } from "@utils/entry-card.ts";
+import ChallengeVerdict from "./ChallengeVerdict.astro";
+
+interface Props {
+	slug: string;
+	signedIn: boolean;
+	login: string;
+	viewer?: ChallengeViewer;
+	entries: ChallengeEntry[];
+}
+const { slug, signedIn, login, viewer, entries } = Astro.props;
+const current = viewer?.entry_id
+	? entries.find((item) => item.entry.id === viewer.entry_id)
+	: undefined;
+const uploadHref = `/challenges/${encodeURIComponent(slug)}/enter`;
+// Short enough for the formatter to keep the link and its period on one line
+// (a line break between them would render as a space).
+const uploadLabel = `${current ? "upload" : "Upload"} a new blueprint for this challenge`;
+---
+
+<section class="your-entry" aria-labelledby="your-entry-heading" data-challenge-slug={slug}>
+	<h2 id="your-entry-heading">Your entry</h2>
+	{!signedIn ? (
+		<p>
+			<a href={login}>Log in</a> to enter this challenge.
+		</p>
+	) : (
+		<>
+			{current ? (
+				<div class="current">
+					<div class="card">
+						<EntryCard card={toCard(current.entry)} headingLevel={3} />
+					</div>
+					<div class="side">
+						<div class="verdict">
+							<ChallengeVerdict item={current} open />
+						</div>
+						<p class="muted">
+							Upload new revisions of it until the deadline: the newest one is scored.
+							It must stay public: making it unlisted or private takes it out of the
+							challenge.
+						</p>
+						<div class="actions">
+							<button type="button" class="secondary" data-challenge-pick-toggle>
+								Change entry
+							</button>
+							<button type="button" class="secondary outline" data-challenge-withdraw>
+								Withdraw
+							</button>
+						</div>
+					</div>
+				</div>
+			) : (
+				<p>
+					Enter one of your public blueprints (a single blueprint, not a book). It must
+					stay public: making it unlisted or private takes it out of the challenge.
+				</p>
+			)}
+			<div
+				class="picker"
+				data-challenge-picker
+				data-current={current?.entry.id}
+				hidden={Boolean(current)}
+			>
+				<input
+					type="search"
+					name="q"
+					placeholder="Search your public blueprints by title"
+					aria-label="Search your public blueprints by title"
+					autocomplete="off"
+					maxlength="120"
+					data-picker-search
+				/>
+				<ul class="picker-list" data-picker-list></ul>
+				<p class="muted" data-picker-empty role="status" aria-live="polite"></p>
+				<button type="button" class="secondary outline" data-picker-more hidden>
+					Show more
+				</button>
+			</div>
+			<p>
+				{current ? "Or " : ""}
+				<a href={uploadHref}>{uploadLabel}</a>.
+			</p>
+		</>
+	)}
+	<p data-challenge-status role="status" aria-live="polite"></p>
+</section>
+
+<style>
+	.your-entry {
+		margin-bottom: 2rem;
+	}
+	.muted {
+		color: var(--pico-muted-color);
+		font-size: 0.9rem;
+	}
+	.current {
+		display: grid;
+		grid-template-columns: minmax(12rem, 16rem) 1fr;
+		gap: 1.5rem;
+		align-items: start;
+		margin-bottom: 1rem;
+	}
+	@media (max-width: 40rem) {
+		.current {
+			grid-template-columns: 1fr;
+		}
+	}
+	.verdict {
+		font-size: 1.05rem;
+	}
+	.verdict :global(p) {
+		margin: 0 0 0.5rem;
+	}
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	.actions button {
+		width: auto;
+		margin: 0;
+	}
+	.picker {
+		margin-bottom: 1rem;
+	}
+	.picker[hidden] {
+		display: none;
+	}
+	.picker-list {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+		gap: 0.5rem;
+		margin: 0 0 0.5rem;
+		padding: 0;
+		list-style: none;
+	}
+	.picker-list :global(li) {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.picker-list :global(.pick) {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		width: 100%;
+		margin: 0;
+		padding: 0.4rem 0.6rem;
+		text-align: left;
+	}
+	.picker-list :global(.pick img),
+	.picker-list :global(.pick .thumb) {
+		flex: none;
+		width: 4.5rem;
+		aspect-ratio: 4 / 3;
+		border-radius: var(--pico-border-radius);
+		object-fit: contain;
+		background: var(--pico-muted-border-color);
+	}
+	.picker-list :global(.pick .name) {
+		overflow: hidden;
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		overflow-wrap: anywhere;
+	}
+	.picker [data-picker-more] {
+		width: auto;
+	}
+</style>

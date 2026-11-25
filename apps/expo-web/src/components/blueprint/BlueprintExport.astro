@@ -1,0 +1,205 @@
+---
+import { assetUrl } from "@lib/api/public-asset";
+import Braces from "@lucide/astro/icons/braces";
+import Clipboard from "@lucide/astro/icons/clipboard";
+import ClipboardCheck from "@lucide/astro/icons/clipboard-check";
+import ClipboardX from "@lucide/astro/icons/clipboard-x";
+import HandGrab from "@lucide/astro/icons/hand-grab";
+import FileText from "@lucide/astro/icons/file-text";
+import TriangleAlert from "@lucide/astro/icons/triangle-exclamation-point";
+import Collapsible from "@components/common/Collapsible.astro";
+
+interface Props {
+	exchangeString: string;
+	label?: string;
+	/**
+	 * API path of the raw string (text/plain); omitted for private entries.
+	 * Also what "Open in editor" loads: a book opens at its own active blueprint.
+	 */
+	rawPath?: string;
+	/** Offer "Open in editor"; false for planners, which the editor cannot open. */
+	editor?: boolean;
+	/**
+	 * Mods the blueprint uses that the editor does not support: the link stays
+	 * (the rest still opens) but warns that their content will be missing.
+	 */
+	editorMissingMods?: string[];
+	/** Start expanded; collapsed by default, since the header's copy button is
+	 * what most visitors need and the string itself is a wall of text. */
+	open?: boolean;
+	/** The book, blueprint or planner's id: links the JSON page, opened on it. */
+	nodeId?: string;
+}
+
+const {
+	exchangeString,
+	label = "Blueprint",
+	rawPath,
+	editor = true,
+	editorMissingMods = [],
+	open = false,
+	nodeId,
+} = Astro.props;
+// Absolute, since the blueprint editor fetches it from its own server.
+const rawUrl = rawPath ? new URL(assetUrl(rawPath), Astro.site ?? Astro.url).toString() : undefined;
+// The Factorio Blueprint Editor fork with 2.0 and Space Age support
+// (github.com/FactoryGameFan/factorio-blueprint-editor; docs/frontend.md#open-in-editor).
+const editorHref =
+	rawUrl && editor
+		? `https://fbe.factorygamefan.com/?source=${encodeURIComponent(rawUrl)}`
+		: undefined;
+const editorWarning =
+	editorMissingMods.length > 0
+		? `This blueprint uses mods the editor does not support (${editorMissingMods.join(", ")}), so their entities will be missing there.`
+		: undefined;
+const editorWarningId = editorWarning ? `editor-warning-${nodeId ?? "string"}` : undefined;
+---
+
+<div data-blueprint-export>
+	<Collapsible title={`${label} string`} open={open}>
+		{editorHref && (
+			<a
+				slot="actions"
+				href={editorHref}
+				class="icon-button"
+				role="button"
+				target="_blank"
+				rel="noopener"
+				data-open-editor
+				data-tooltip={editorWarning ? `Open in editor. ${editorWarning}` : "Open in editor"}
+				data-placement="left"
+				data-editor-warning={editorWarning ? "" : undefined}
+				aria-label="Open in editor"
+				aria-describedby={editorWarningId}
+			>
+				<img
+					src="/third-party/fbe/favicon.png"
+					alt="Factorio Blueprint Editor"
+					width="196"
+					height="196"
+				/>
+				{editorWarning && (
+					<>
+						<TriangleAlert class="editor-warning-badge" aria-hidden="true" />
+						<span id={editorWarningId} class="visually-hidden">
+							{editorWarning}
+						</span>
+					</>
+				)}
+			</a>
+		)}
+		{nodeId && (
+			<a
+				slot="actions"
+				href={`/json?from=${encodeURIComponent(nodeId)}`}
+				class="icon-button"
+				role="button"
+				data-open-json
+				data-tooltip="Open as JSON"
+				data-placement="left"
+				aria-label="Open as JSON"
+			>
+				<Braces aria-hidden="true" />
+			</a>
+		)}
+		{rawUrl && (
+			<a
+				slot="actions"
+				href={rawUrl}
+				class="icon-button"
+				role="button"
+				target="_blank"
+				rel="noopener"
+				data-raw-string
+				data-tooltip="Raw string"
+				data-placement="left"
+				aria-label="Raw string"
+			>
+				<FileText aria-hidden="true" />
+			</a>
+		)}
+		<span
+			slot="actions"
+			role="button"
+			class="icon-button"
+			data-drag-string
+			data-tooltip="Drag the string into the game"
+			data-placement="left"
+			aria-label="Drag the string into the game"
+		>
+			<HandGrab aria-hidden="true" />
+		</span>
+		<button
+			slot="actions"
+			type="button"
+			class="icon-button"
+			data-copy-export
+			data-tooltip="Copy to clipboard"
+			data-placement="left"
+			aria-label="Copy to clipboard"
+		>
+			<Clipboard data-copy-icon="idle" />
+			<ClipboardCheck data-copy-icon="success" aria-hidden="true" />
+			<ClipboardX data-copy-icon="failed" aria-hidden="true" />
+		</button>
+		<textarea
+			class="mono"
+			readonly
+			rows="5"
+			aria-label={`${label} exchange string`}
+		>{exchangeString}</textarea>
+	</Collapsible>
+	<span class="copy-status" role="status" aria-live="polite"></span>
+</div>
+
+<script>
+	import "./copy-export.ts";
+</script>
+
+<style>
+	textarea {
+		margin: 0;
+		font-size: 0.75rem;
+		resize: vertical;
+	}
+
+	/* The editor's own logo, sized like the Lucide icons beside it. */
+	[data-open-editor] img {
+		width: 1.25em;
+		height: 1.25em;
+	}
+
+	/* Marks an editor link that will open the blueprint without its mods. */
+	[data-open-editor] {
+		position: relative;
+	}
+
+	/* The warning is a sentence: let its tooltip wrap instead of running off
+	   the screen (Pico keeps tooltips on one line). */
+	[data-editor-warning]::before {
+		width: max-content;
+		max-width: min(20rem, 70vw);
+		white-space: normal;
+		text-align: left;
+	}
+
+	[data-open-editor] :global(svg.editor-warning-badge) {
+		position: absolute;
+		right: -0.2rem;
+		bottom: -0.2rem;
+		width: 0.85rem;
+		height: 0.85rem;
+		border-radius: 50%;
+		background: var(--pico-background-color);
+		color: var(--pico-del-color);
+	}
+
+	/* Screen-reader announcement only; sighted users get the tooltip. */
+	.copy-status {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+</style>

@@ -1,0 +1,130 @@
+---
+// Blueprint detail view (docs/frontend.md #5): one leaf's preview, analysis,
+// and exchange-string export. Reached directly (single-blueprint entry) or
+// from the book tree view (breadcrumb back to the tree). The leaf inherits the
+// entry's uploader and dates, shown in the same panel as on the entry page.
+import { assetUrl } from "@lib/api/public-asset";
+import SpoilerGate from "@components/entry/SpoilerGate.astro";
+import BlueprintDetail from "@components/blueprint/BlueprintDetail.astro";
+import BlueprintHeading from "@components/blueprint/BlueprintHeading.astro";
+import EntryInfo from "@components/entry/EntryInfo.astro";
+import Page from "@layouts/Page.astro";
+import { blueprintRawPath } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server.ts";
+import { loadEntryAccess, unlessMissing } from "@lib/entry-access";
+import { editorLinks } from "@lib/entry-links";
+import { entryView } from "@lib/entry-view";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { creativeWorkJsonLd, metaDescription } from "@utils/meta.ts";
+import { toPublicAssetUrl } from "@lib/api/asset-url";
+
+const { publicId, blueprintId } = Astro.params;
+const api = getServerApiClient(Astro);
+
+const [access, leaf] = await Promise.all([
+	loadEntryAccess(api, publicId!),
+	unlessMissing(api.entries.getLeafDetail(publicId!, blueprintId!)),
+]);
+if (!access || !leaf) return Astro.rewrite("/404");
+const { entry, canEdit } = access;
+// Comments belong to the entry; the leaf only links to its thread (-1: none).
+const commentCount = entry.quick_preview
+	? -1
+	: await api.comments
+			.list(publicId!, { limit: 1 })
+			.then((page) => (page.viewer.blocked === "closed" ? -1 : page.total))
+			.catch(() => -1);
+
+// The leaf belongs to one revision; show that revision's facts, and send
+// "back" to it only when it is not the live one.
+const currentRevisionId = entry.revision?.id;
+if (leaf.revision.id !== currentRevisionId) {
+	entry.revision = await api.entries
+		.getRevision(publicId!, leaf.revision.id)
+		.catch(() => entry.revision);
+}
+const back = editorLinks(Astro.url).entry(
+	publicId!,
+	leaf.revision.id !== currentRevisionId ? leaf.revision.id : undefined,
+);
+const view = entryView(entry, access);
+const hidden = !view.indexable;
+if (hidden) Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow");
+const description = metaDescription(
+	leaf.description,
+	`A Factorio blueprint${entry.revision?.game_version ? ` for version ${entry.revision.game_version}` : ""}, with preview and production analysis.`,
+);
+// A spoiler's previews stay hidden until a click: no share image.
+const image =
+	leaf.preview && view.showShareImage ? assetUrl(leaf.preview.thumbnail_url) : undefined;
+// A single-blueprint entry shows this same leaf on its own page: that is the one to index.
+const canonicalPath = entry.revision?.root?.kind === "blueprint" ? `/e/${entry.id}` : undefined;
+const pageTitle = stripRichText(leaf.label) || "Blueprint";
+// A book's blueprint: its own work, part of the entry. A single-blueprint
+// entry's leaf defers to the entry page, which carries the data.
+const structuredData =
+	hidden || canonicalPath
+		? undefined
+		: creativeWorkJsonLd({
+				site: Astro.site ?? Astro.url,
+				path: `/e/${entry.id}/b/${leaf.id}`,
+				name: pageTitle,
+				description,
+				entry,
+				image,
+				isPartOf: {
+					type: "CreativeWork",
+					name: stripRichText(entry.title) || "Blueprint book",
+					path: `/e/${entry.id}`,
+				},
+			});
+---
+
+<Page
+	title={pageTitle}
+	description={description}
+	image={image}
+	canonicalPath={canonicalPath}
+	type="article"
+	noindex={hidden}
+>
+	{structuredData && (
+		<script slot="head" type="application/ld+json" is:inline set:html={structuredData} />
+	)}
+	<nav class="leaf-nav">
+		<a href={back}>← Back to entry</a>
+		{commentCount >= 0 && (
+			<a href={`${back}#comments`}>
+				{commentCount === 0 ? "Comments" : `Comments (${commentCount})`}
+			</a>
+		)}
+	</nav>
+	<BlueprintHeading level="h1" icons={leaf.icons} label={leaf.label} />
+	{leaf.description && <p set:html={formatRichText(leaf.description)} />}
+	<SpoilerGate spoiler={entry.spoiler}>
+		<BlueprintDetail
+			leaf={leaf}
+			entryId={publicId!}
+			rawPath={view.shareable ? blueprintRawPath(leaf.id) : undefined}
+		>
+			<EntryInfo
+				slot="aside"
+				entry={entry}
+				currentRevisionId={currentRevisionId}
+				canEdit={canEdit}
+				collectable={!entry.quick_preview}
+				copyable
+				leaf={leaf}
+			/>
+		</BlueprintDetail>
+	</SpoilerGate>
+</Page>
+
+<style>
+	.leaf-nav {
+		flex-wrap: wrap;
+		gap: 0.5rem 1rem;
+		margin-bottom: 1rem;
+	}
+</style>

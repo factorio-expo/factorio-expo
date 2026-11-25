@@ -1,0 +1,112 @@
+---
+// The owner's collections as cards (CollectionGrid), rendered by the server;
+// collections-list.ts creates (from the "New collection" dialog, then reloads)
+// and deletes.
+import Plus from "@lucide/astro/icons/plus";
+import CollectionGrid from "@components/collection/CollectionGrid.astro";
+import ModalDialog from "@components/common/ModalDialog.astro";
+import IconPicker from "@factorio-expo/ui/game/icon-picker/IconPicker.astro";
+import Page from "@layouts/Page.astro";
+import { getServerApiClient } from "@lib/api/server.ts";
+import { redirectToLoginUnlessSignedIn } from "@lib/viewer";
+
+const redirect = await redirectToLoginUnlessSignedIn(Astro);
+if (redirect) return redirect;
+const { collections } = await getServerApiClient(Astro).collections.listMine();
+---
+
+<Page title="Collections" nav="collections" noindex>
+	<header class="page-head">
+		<h1>Collections</h1>
+		<button type="button" class="new-collection" data-new-collection aria-haspopup="dialog">
+			<Plus aria-hidden="true" />
+			New collection
+		</button>
+	</header>
+	<p data-collections-status role="status" aria-live="polite">
+		{collections.length === 0 ? "You have no collections yet." : ""}
+	</p>
+	<CollectionGrid
+		collections={collections}
+		href={(collection) => `/account/collections/${collection.id}`}
+		owner
+	/>
+
+	<ModalDialog titleId="new-collection-title" title="New collection" closeLabel="Close" overhang>
+		<form data-collection-form>
+			<IconPicker targetId="new-collection-name">
+				<label slot="label" for="new-collection-name">
+					Name <small>(icons like [item=iron-plate])</small>
+				</label>
+				<input
+					id="new-collection-name"
+					name="name"
+					maxlength="100"
+					required
+					autocomplete="off"
+				/>
+			</IconPicker>
+			<label for="new-collection-visibility">Visibility</label>
+			<select id="new-collection-visibility" name="visibility">
+				<option value="private">Private</option>
+				<option value="public">Public</option>
+			</select>
+			<p data-collection-form-status role="status" aria-live="polite"></p>
+			<footer>
+				<button type="button" class="secondary outline" data-dialog-close>
+					Cancel
+				</button>
+				{/* Enabled by collections-list.ts once it handles the submit. */}
+				<button type="submit" disabled>
+					Create
+				</button>
+			</footer>
+		</form>
+	</ModalDialog>
+</Page>
+
+<script>
+	import "@components/account/collections-list.ts";
+</script>
+
+<style>
+	.page-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 1rem;
+	}
+	.page-head h1 {
+		margin: 0;
+	}
+	.new-collection {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		width: auto;
+		margin: 0;
+	}
+	.new-collection :global(svg) {
+		width: 1.1rem;
+		height: 1.1rem;
+	}
+	[data-collections-status]:empty,
+	[data-collection-form-status]:empty {
+		margin: 0;
+	}
+	form footer {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.75rem;
+		margin: 0;
+		padding: 0;
+		border: none;
+		background: none;
+	}
+	form footer button {
+		width: auto;
+		margin: 0;
+	}
+</style>

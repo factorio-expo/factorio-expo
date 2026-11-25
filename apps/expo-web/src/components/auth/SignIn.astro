@@ -1,0 +1,211 @@
+---
+// The login page's ways in: provider links (sign in, or sign up and pick a
+// username next), then passkeys behind a "have an account / new here" choice
+// (CSS only, so it works before the script loads). Behaviour in sign-in.ts.
+// With Turnstile on (lib/turnstile.ts), "I'm new here" runs the sign-up
+// human check; sign-in has none.
+import { assetUrl } from "@lib/api/public-asset";
+import KeyRound from "@lucide/astro/icons/key-round";
+import { PUBLIC_API_BASE_URL, PUBLIC_TURNSTILE_SITE_KEY } from "astro:env/client";
+import { providerStartPath, type SignInProvider } from "@lib/api";
+import PausedNotice from "@components/common/PausedNotice.astro";
+import { SIGNUPS_PAUSED } from "@lib/site-pause";
+import { getSiteStatus } from "@lib/site-status";
+import ProviderButton from "./ProviderButton.astro";
+import { inDisplayOrder } from "./provider-order";
+
+interface Props {
+	providers: SignInProvider[];
+	/** Where to go after signing in (already checked by safeNext). */
+	next: string;
+}
+
+const { providers, next } = Astro.props;
+const signupsPaused = !(await getSiteStatus()).signups;
+const noPasskeys =
+	providers.length > 0
+		? "This browser does not support passkeys; use a sign-in above."
+		: "This browser does not support passkeys.";
+const startHref = (provider: string) => assetUrl(providerStartPath(provider, { next }));
+---
+
+<section class="sign-in" data-sign-in data-next={next}>
+	{providers.length > 0 && (
+		<div class="providers">
+			{inDisplayOrder(providers).map((provider) => (
+				<ProviderButton
+					provider={provider}
+					href={startHref(provider.id)}
+					action="continue"
+				/>
+			))}
+			{signupsPaused ? (
+				<small>New sign-ups are paused; existing accounts can still log in.</small>
+			) : (
+				<small>New here? This creates your account; you choose a username next.</small>
+			)}
+		</div>
+	)}
+
+	<div class="passkeys" data-passkeys>
+		{providers.length > 0 && <p class="divider">or use a passkey</p>}
+		<p class="hint">
+			Your device's fingerprint, face or PIN, or a password manager. No password to remember.
+		</p>
+
+		<fieldset class="mode">
+			<legend class="visually-hidden">Do you have an account?</legend>
+			<label>
+				<input type="radio" name="passkey-mode" value="login" checked />I have an account
+			</label>
+			<label>
+				<input type="radio" name="passkey-mode" value="signup" />
+				I'm new here
+			</label>
+		</fieldset>
+
+		<div class="mode-login">
+			{/* Enabled by sign-in.ts once it knows this browser has passkeys. */}
+			<button type="button" class="contrast with-icon" data-passkey-login disabled>
+				<KeyRound aria-hidden="true" />
+				Log in with a passkey
+			</button>
+		</div>
+
+		<form class="mode-signup" data-passkey-signup novalidate>
+			{signupsPaused && <PausedNotice message={SIGNUPS_PAUSED} />}
+			<fieldset disabled={signupsPaused} data-passkey-signup-fields>
+				<label for="signup-username">Username</label>
+				<input
+					id="signup-username"
+					name="username"
+					autocomplete="off"
+					required
+					minlength="3"
+					maxlength="32"
+					pattern="[A-Za-z0-9_\-]{3,32}"
+					aria-describedby="signup-username-help"
+				/>
+				<small id="signup-username-help">
+					3-32 letters, digits, _ or -. Shown on your uploads.
+				</small>
+				{PUBLIC_TURNSTILE_SITE_KEY && (
+					<div
+						class="human-check"
+						data-turnstile
+						data-sitekey={PUBLIC_TURNSTILE_SITE_KEY}
+						data-action="signup-passkey"
+					/>
+				)}
+				<button type="submit" class="with-icon" disabled>
+					<KeyRound aria-hidden="true" />
+					Create account with a passkey
+				</button>
+			</fieldset>
+		</form>
+	</div>
+	<p data-no-passkeys hidden>
+		{noPasskeys}
+	</p>
+	<p data-sign-in-status role="alert" aria-live="polite"></p>
+</section>
+
+<script>
+	import "./sign-in.ts";
+</script>
+
+<style>
+	.sign-in {
+		max-width: 26rem;
+	}
+	.providers {
+		display: grid;
+		gap: 0.5rem;
+		margin-bottom: 1.5rem;
+	}
+
+	/* "or use a passkey" between two rules. */
+	.divider {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 0.5rem;
+		color: var(--pico-muted-color);
+		font-size: 0.875rem;
+
+		&::before,
+		&::after {
+			content: "";
+			flex: 1;
+			border-top: 1px solid var(--pico-muted-border-color);
+		}
+	}
+	.hint {
+		color: var(--pico-muted-color);
+		font-size: 0.875rem;
+	}
+
+	/* Two-way segmented choice; the radios stay focusable for the keyboard. */
+	.mode {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		margin-bottom: 1rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+		overflow: hidden;
+
+		label {
+			position: relative;
+			margin: 0;
+			padding: 0.6rem 0.5rem;
+			text-align: center;
+			cursor: pointer;
+
+			&:has(:checked) {
+				background: var(--pico-primary-background);
+				color: var(--pico-primary-inverse);
+			}
+			&:has(:focus-visible) {
+				outline: 2px solid var(--pico-primary-focus);
+				outline-offset: -2px;
+			}
+		}
+		/* Invisible, covering its label, so clicks land on the radio itself. */
+		input {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			margin: 0;
+			opacity: 0;
+			cursor: pointer;
+		}
+	}
+	.passkeys:has([value="signup"]:checked) .mode-login,
+	.passkeys:has([value="login"]:checked) .mode-signup {
+		display: none;
+	}
+
+	.human-check {
+		margin-bottom: var(--pico-spacing);
+	}
+	.with-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		width: 100%;
+
+		:global(svg) {
+			width: 1.15rem;
+			height: 1.15rem;
+			flex: none;
+		}
+	}
+	[data-sign-in-status]:empty {
+		margin: 0;
+	}
+	[data-sign-in-status] {
+		color: var(--pico-del-color);
+	}
+</style>

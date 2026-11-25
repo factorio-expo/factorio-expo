@@ -1,0 +1,235 @@
+---
+// Users (admins only; expo-api enforces it): every account, newest first,
+// searchable by username and filtered by state. Each opens the
+// account's page for bans, logout and deletion. The Deleted tab is the
+// deletion queue: deleted accounts by their hard-delete date.
+import Console from "@layouts/Console.astro";
+import { loadFromApi } from "@lib/api/page";
+import type { StaffUser, UserStatus } from "@lib/api/types";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { signInMethods } from "@lib/format";
+
+const statuses: { key: UserStatus; label: string }[] = [
+	{ key: "all", label: "All" },
+	{ key: "active", label: "Active" },
+	{ key: "banned", label: "Banned" },
+	{ key: "deleted", label: "Deleted" },
+];
+const params = Astro.url.searchParams;
+const q = params.get("q")?.trim() ?? "";
+const statusParam = params.get("status");
+const status: UserStatus = statuses.some((s) => s.key === statusParam)
+	? (statusParam as UserStatus)
+	: "all";
+const cursor = params.get("cursor") ?? undefined;
+
+const loaded = await loadFromApi(Astro, (api) => api.users({ q, status, cursor }));
+const page = loaded.data;
+// The deletion queue replaces the list on the Deleted tab (unsearched).
+const queueShown = status === "deleted" && !q && !cursor;
+const queue = queueShown ? await loadFromApi(Astro, (api) => api.deletionQueue()) : undefined;
+const DAY_MS = 86_400_000;
+const daysLeft = (iso: string) => Math.ceil((Date.parse(iso) - Date.now()) / DAY_MS);
+const number = new Intl.NumberFormat("en");
+
+const listHref = (next: { status?: UserStatus; cursor?: string }) => {
+	const search = new URLSearchParams();
+	if (q) search.set("q", q);
+	const nextStatus = next.status ?? status;
+	if (nextStatus !== "all") search.set("status", nextStatus);
+	if (next.cursor) search.set("cursor", next.cursor);
+	const text = search.toString();
+	return text ? `/users?${text}` : "/users";
+};
+const date = (iso: string) => isoDateTime(iso).replace(/, \d\d:\d\d UTC$/, "");
+const isNew = (user: StaffUser) => Date.now() - Date.parse(user.created_at) < 7 * 86_400_000;
+---
+
+<Console
+	title="Users"
+	nav="users"
+	description="Every expo account. Open one to ban, log out or delete it."
+>
+	{loaded.error && (
+		<p class="error" role="alert">
+			{loaded.error}
+		</p>
+	)}
+
+	<nav class="tabs" aria-label="Filter accounts">
+		{statuses.map((s) => (
+			<a
+				href={listHref({ status: s.key })}
+				aria-current={s.key === status ? "page" : undefined}
+			>
+				{s.label}
+				{page && <span class="count">{number.format(page.counts[s.key])}</span>}
+			</a>
+		))}
+	</nav>
+
+	<form method="get" class="toolbar" role="search">
+		{status !== "all" && <input type="hidden" name="status" value={status} />}
+		<input
+			type="search"
+			name="q"
+			value={q}
+			placeholder="Username"
+			aria-label="Search by username"
+		/>
+		<button type="submit" class="secondary">
+			Search
+		</button>
+		{q && <a href={status === "all" ? "/users" : `/users?status=${status}`}>Clear</a>}
+	</form>
+
+	{queue?.error && (
+		<p class="error" role="alert">
+			{queue.error}
+		</p>
+	)}
+	{queue?.data && (
+		<section class="panel" aria-labelledby="deletion-queue">
+			<div class="panel-head">
+				<h2 id="deletion-queue">Deletion queue</h2>
+			</div>
+			<p class="muted">
+				Deleted accounts wait a week, then the daily sweep hard-deletes them with their
+				entries. Cleanups can do it sooner.
+			</p>
+			{queue.data.length === 0 ? (
+				<p class="empty">No account is waiting for its hard delete.</p>
+			) : (
+				<div class="table-wrap">
+					<table class="data">
+						<thead>
+							<tr>
+								<th scope="col">Username</th>
+								<th scope="col">Deleted</th>
+								<th scope="col">Hard delete</th>
+								<th scope="col" class="num">
+									Entries left
+								</th>
+								<th scope="col">State</th>
+							</tr>
+						</thead>
+						<tbody>
+							{queue.data.map((account) => {
+								const days = daysLeft(account.purge_at);
+								return (
+									<tr>
+										<td>
+											<a href={`/users/${encodeURIComponent(account.id)}`}>
+												<strong>{account.username}</strong>
+											</a>
+										</td>
+										<td class="nowrap">{date(account.deleted_at)}</td>
+										<td class="nowrap">
+											{date(account.purge_at)}{" "}
+											{days > 0 ? (
+												<span class="pill">
+													{days} day{days === 1 ? "" : "s"} left
+												</span>
+											) : (
+												<span class="pill" data-tone="warn">
+													overdue
+												</span>
+											)}
+										</td>
+										<td class="num">{number.format(account.entries)}</td>
+										<td>
+											{account.banned && (
+												<span class="pill" data-tone="warn">
+													banned
+												</span>
+											)}
+										</td>
+									</tr>
+								);
+							})}
+						</tbody>
+					</table>
+				</div>
+			)}
+		</section>
+	)}
+
+	{!queueShown && page && page.users.length === 0 && (
+		<p class="empty">
+			No accounts{q ? ` match "${q}"` : ""}
+			{cursor ? " on this page" : ""}.
+		</p>
+	)}
+	{!queueShown && page && page.users.length > 0 && (
+		<div class="table-wrap">
+			<table class="data">
+				<thead>
+					<tr>
+						<th scope="col">Username</th>
+						<th scope="col">Sign-in</th>
+						<th scope="col">Joined</th>
+						<th scope="col" class="num">
+							Entries
+						</th>
+						<th scope="col" class="num">
+							Comments
+						</th>
+						<th scope="col">State</th>
+					</tr>
+				</thead>
+				<tbody>
+					{page.users.map((user) => (
+						<tr data-deleted={user.deleted_at ? "" : undefined}>
+							<td>
+								<a href={`/users/${encodeURIComponent(user.id)}`}>
+									<strong>{user.username}</strong>
+								</a>
+							</td>
+							<td>{signInMethods(user)}</td>
+							<td class="nowrap">{date(user.created_at)}</td>
+							<td class="num">{number.format(user.entries)}</td>
+							<td class="num">{number.format(user.comments)}</td>
+							<td>
+								<div class="states">
+									{user.deleted_at && (
+										<span class="pill" data-tone="danger">
+											deleted
+										</span>
+									)}
+									{user.ban_actions.length > 0 && (
+										<span class="pill" data-tone="warn">
+											no {user.ban_actions.join(", ")}
+										</span>
+									)}
+									{!user.deleted_at &&
+										user.ban_actions.length === 0 &&
+										isNew(user) && <span class="pill">new</span>}
+								</div>
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+	)}
+	{!queueShown && (
+		<nav class="pager" aria-label="Pages">
+			{cursor && <a href={listHref({})}>Newest</a>}
+			{page?.next_cursor && <a href={listHref({ cursor: page.next_cursor })}>Older</a>}
+		</nav>
+	)}
+</Console>
+
+<style>
+	.nowrap {
+		white-space: nowrap;
+	}
+	.states {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem;
+	}
+	tr[data-deleted] td {
+		color: var(--pico-muted-color);
+	}
+</style>

@@ -1,0 +1,250 @@
+---
+// Tree node renderer (docs/frontend.md "Shared building blocks"): recurses
+// arbitrarily deep since books can nest. Astro components may not import
+// themselves directly, so recursion goes through Astro.self. Planners have no
+// page of their own: they open in place with their settings and string.
+// Consecutive blueprints of a book show as a grid of cards (LeafCard), while
+// sub-books and planners keep their rows, so the author's grouping and order
+// stay as they are. Only the root book starts open: its own blueprints and
+// sub-books show, and each sub-book opens on a click.
+import type { Node } from "@lib/api";
+import BlueprintIcon from "@components/common/BlueprintIcon.astro";
+import BlueprintExport from "@components/blueprint/BlueprintExport.astro";
+import PlannerSettings from "@components/planner/PlannerSettings.astro";
+import { editorLinks, nodeAnchor } from "@lib/entry-links";
+import { isPlannerKind, nodeKindLabel } from "@lib/planners";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import LeafCard from "./LeafCard.astro";
+
+export interface Props {
+	node: Node;
+	entryId: string;
+	/** 0 for the root book. */
+	depth?: number;
+}
+
+const { node, entryId, depth = 0 } = Astro.props;
+// The leaf page knows its own revision, so the link only carries the edit token.
+const links = editorLinks(Astro.url);
+
+type Run = { leaves: Node[] } | { node: Node };
+/** A book's children in order, with each stretch of blueprints as one run. */
+function runsOf(children: Node[]): Run[] {
+	const runs: Run[] = [];
+	for (const child of children) {
+		const last = runs.at(-1);
+		if (child.kind !== "blueprint") runs.push({ node: child });
+		else if (last && "leaves" in last) last.leaves.push(child);
+		else runs.push({ leaves: [child] });
+	}
+	return runs;
+}
+---
+
+<li class="tree-node" data-kind={node.kind}>
+	{node.kind === "book" && node.children && node.children.length > 0 ? (
+		<details open={depth === 0}>
+			<summary class="tree-node-heading">
+				<BlueprintIcon kind={node.kind} icons={node.icons} />
+				<strong
+					class="tree-node-label"
+					set:html={formatRichText(node.label || "Unnamed book")}
+				/>
+				<span class="tree-node-meta">{node.children.length}</span>
+			</summary>
+			<ul>
+				{runsOf(node.children).map((run) =>
+					"leaves" in run ? (
+						<li class="leaf-run">
+							<div class="leaf-grid">
+								{run.leaves.map((leaf) => (
+									<LeafCard node={leaf} href={links.leaf(entryId, leaf.id)} />
+								))}
+							</div>
+						</li>
+					) : (
+						<Astro.self node={run.node} entryId={entryId} depth={depth + 1} />
+					),
+				)}
+			</ul>
+		</details>
+	) : isPlannerKind(node.kind) ? (
+		<details class="planner" id={nodeAnchor(node.id).slice(1)}>
+			<summary class="tree-node-heading">
+				<BlueprintIcon kind={node.kind} icons={node.icons} />
+				<strong
+					class="tree-node-label"
+					set:html={formatRichText(
+						node.label || `Unnamed ${nodeKindLabel(node.kind).toLowerCase()}`,
+					)}
+				/>
+			</summary>
+			<div class="planner-body">
+				{node.description && <p set:html={formatRichText(node.description)} />}
+				<PlannerSettings kind={node.kind} settings={node.planner} />
+				{node.exchange_string && (
+					<BlueprintExport
+						exchangeString={node.exchange_string}
+						label={nodeKindLabel(node.kind)}
+						editor={false}
+						nodeId={node.id}
+					/>
+				)}
+			</div>
+		</details>
+	) : (
+		<div class="tree-node-heading">
+			<BlueprintIcon kind={node.kind} icons={node.icons} />
+			{node.kind === "blueprint" ? (
+				<a
+					class="tree-node-label"
+					href={links.leaf(entryId, node.id)}
+					set:html={formatRichText(node.label || "Unnamed blueprint")}
+				/>
+			) : (
+				<strong
+					class="tree-node-label"
+					set:html={formatRichText(node.label || "Unnamed book")}
+				/>
+			)}
+			{node.kind === "book" && <span class="tree-node-meta">0</span>}
+		</div>
+	)}
+</li>
+
+<style>
+	.tree-node {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	.tree-node-heading {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.25rem 0.5rem;
+		border-radius: var(--pico-border-radius);
+	}
+
+	summary.tree-node-heading {
+		cursor: pointer;
+		list-style: none;
+		user-select: none;
+	}
+
+	summary.tree-node-heading::-webkit-details-marker {
+		display: none;
+	}
+
+	/* Chevron after the count: points down when open, right when collapsed. */
+	summary.tree-node-heading::after {
+		content: "";
+		flex: none;
+		width: 0.5rem;
+		height: 0.5rem;
+		margin-left: auto;
+		border-right: 2px solid var(--pico-muted-color);
+		border-bottom: 2px solid var(--pico-muted-color);
+		transform: rotate(-45deg);
+		transition: transform 0.15s;
+	}
+
+	details[open] > summary.tree-node-heading::after {
+		transform: rotate(45deg);
+	}
+
+	.tree-node-heading:hover {
+		background: var(--pico-card-sectioning-background-color);
+	}
+
+	.tree-node-heading > :global(.blueprint-icon) {
+		font-size: 3rem;
+	}
+
+	.tree-node-label {
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+
+	.tree-node-heading a.tree-node-label {
+		text-decoration: none;
+	}
+
+	.tree-node-heading a.tree-node-label:hover {
+		text-decoration: underline;
+	}
+
+	.planner-body {
+		margin: 0.25rem 0 1rem 3.75rem;
+	}
+
+	@media (max-width: 36rem) {
+		.planner-body {
+			margin-left: 0.5rem;
+		}
+	}
+
+	.tree-node-meta {
+		flex: none;
+		padding: 0 0.5rem;
+		border-radius: 1rem;
+		background: var(--pico-muted-border-color);
+		color: var(--pico-muted-color);
+		font-size: 0.75rem;
+		line-height: 1.4rem;
+	}
+
+	/* Children hang off a guide line aligned with the parent's icon centre. */
+	ul {
+		margin: 0 0 0 1.75rem;
+		padding: 0 0 0 1rem;
+		list-style: none;
+		border-left: 2px solid var(--pico-muted-border-color);
+	}
+
+	ul > :global(.tree-node) {
+		position: relative;
+	}
+
+	.leaf-run {
+		list-style: none;
+		margin: 0.5rem 0 0.75rem;
+	}
+
+	.leaf-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+		gap: 0.75rem;
+	}
+
+	ul > :global(.tree-node)::before {
+		content: "";
+		position: absolute;
+		top: 1.75rem;
+		left: -1rem;
+		width: 0.75rem;
+		border-top: 2px solid var(--pico-muted-border-color);
+	}
+</style>
+
+<script>
+	// A search result links a planner inside a book as #node-<id>: open its
+	// row and the sub-books around it, then bring it into view.
+	function openLinkedNode() {
+		const id = decodeURIComponent(location.hash.slice(1));
+		if (!id.startsWith("node-")) return;
+		const target = document.getElementById(id);
+		if (!(target instanceof HTMLDetailsElement)) return;
+		for (
+			let node: Element | null = target;
+			node;
+			node = node.parentElement?.closest("details") ?? null
+		) {
+			if (node instanceof HTMLDetailsElement) node.open = true;
+		}
+		target.scrollIntoView({ block: "center" });
+	}
+	openLinkedNode();
+	window.addEventListener("hashchange", openLinkedNode);
+</script>

@@ -1,0 +1,119 @@
+---
+// A provider sign-in or link button in that provider's brand style. Logos are
+// in public/third-party/; each follows its owner's guidelines:
+// - GitHub, Discord: brand colour fill, white mark (CSS mask over the SVG).
+// - Google: light or dark theme with the full-colour G, never recoloured.
+// - Steam: Valve's official "Sign in through Steam" image, unaltered, in a
+//   black frame sized like the other buttons.
+// Unknown providers fall back to a plain secondary button.
+import type { SignInProvider } from "@lib/api";
+
+interface Props {
+	provider: SignInProvider;
+	href: string;
+	/** "continue" on the login page, "link" in account settings. */
+	action: "continue" | "link";
+}
+
+const { provider, href, action } = Astro.props;
+const text = action === "link" ? `Link ${provider.label}` : `Continue with ${provider.label}`;
+// Literal class names so PurgeCSS (astro.config.mjs) keeps their styles.
+const brandClasses: Record<string, string> = {
+	github: "provider-github",
+	discord: "provider-discord",
+	google: "provider-google",
+};
+const brandClass = brandClasses[provider.id];
+---
+
+{provider.id === "steam" ? (
+	<a
+		role="button"
+		class="provider brand provider-steam"
+		href={href}
+		data-provider={provider.id}
+		aria-label={action === "link" ? text : undefined}
+	>
+		<img src="/third-party/sits_01.png" width="180" height="35" alt="Sign in through Steam" />
+	</a>
+) : (
+	<a
+		role="button"
+		class:list={["provider", brandClass ? ["brand", brandClass] : "secondary"]}
+		href={href}
+		data-provider={provider.id}
+	>
+		{provider.id === "google" ? (
+			<img class="logo" src="/third-party/google-g.svg" width="20" height="20" alt="" />
+		) : (
+			brandClass && <span class="logo" aria-hidden="true" />
+		)}
+		{text}
+	</a>
+)}
+
+<style>
+	.provider {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.75rem;
+		/* One height for all, including Steam's 35px image. */
+		min-height: 3.125rem;
+		padding-block: 0;
+	}
+	.brand {
+		--pico-background-color: var(--brand-bg);
+		--pico-border-color: var(--brand-border, var(--brand-bg));
+		--pico-color: var(--brand-fg, #fff);
+
+		&:is(:hover, :active, :focus) {
+			--pico-background-color: var(--brand-hover);
+			--pico-border-color: var(--brand-border, var(--brand-hover));
+			--pico-color: var(--brand-fg, #fff);
+		}
+	}
+	.logo {
+		width: 1.25rem;
+		height: 1.25rem;
+		flex: none;
+	}
+	span.logo {
+		background-color: currentColor;
+		mask: var(--logo) center / contain no-repeat;
+	}
+
+	.provider-github {
+		--brand-bg: #181717;
+		--brand-hover: #333131;
+		--logo: url("/third-party/simple-icons/github.svg");
+	}
+	.provider-discord {
+		--brand-bg: #5865f2;
+		--brand-hover: #4752c4;
+		--logo: url("/third-party/simple-icons/discord.svg");
+	}
+	/* Google's light theme; the dark theme follows the site theme. */
+	.provider-google {
+		--brand-bg: #ffffff;
+		--brand-hover: #f2f2f2;
+		--brand-border: #747775;
+		--brand-fg: #1f1f1f;
+	}
+	:global(:root[data-theme="dark"]) .provider-google {
+		--brand-bg: #131314;
+		--brand-hover: #2a2a2c;
+		--brand-border: #8e918f;
+		--brand-fg: #e3e3e3;
+	}
+	.provider-steam {
+		--brand-bg: #000000;
+		--brand-hover: #1f1f1f;
+		padding-inline: 0.75rem;
+
+		img {
+			display: block;
+			max-width: none;
+		}
+	}
+</style>

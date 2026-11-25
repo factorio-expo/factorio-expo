@@ -1,0 +1,105 @@
+---
+// Uploading a new blueprint for an open challenge: the challenge's name and
+// the exchange string, nothing else. The entry is public and titled after the
+// blueprint's label (components/challenge/challenge-upload.ts), then entered.
+import ArrowLeft from "@lucide/astro/icons/arrow-left";
+import ChallengeIcon from "@components/challenge/ChallengeIcon.astro";
+import PausedNotice from "@components/common/PausedNotice.astro";
+import TermsNote from "@components/common/TermsNote.astro";
+import Page from "@layouts/Page.astro";
+import { ApiError } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server";
+import { uploadPause } from "@lib/site-pause";
+import { getSiteStatus } from "@lib/site-status";
+import { getViewer, redirectToLoginUnlessSignedIn } from "@lib/viewer";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+
+const redirect = await redirectToLoginUnlessSignedIn(Astro);
+if (redirect) return redirect;
+const viewer = await getViewer(Astro);
+const username = viewer.state === "in" ? viewer.user.username : "";
+
+const { slug } = Astro.params;
+let challenge;
+try {
+	challenge = await getServerApiClient(Astro).challenges.get(slug!);
+} catch (err) {
+	if (err instanceof ApiError && err.status === 404) return Astro.rewrite("/404");
+	throw err;
+}
+const challengePath = `/challenges/${encodeURIComponent(challenge.slug)}`;
+const open = challenge.status === "open";
+const paused = uploadPause(await getSiteStatus(), true);
+const plainTitle = stripRichText(challenge.title);
+---
+
+<Page title={`Enter ${plainTitle}`} nav="challenges" noindex>
+	<nav class="back">
+		<a href={challengePath}>
+			<ArrowLeft aria-hidden="true" /> Back to the challenge
+		</a>
+	</nav>
+	<h1 class="enter-heading">
+		<ChallengeIcon icons={challenge.icons} size="2.5rem" />
+		<span>
+			Enter <span set:html={formatRichText(challenge.title)} />
+		</span>
+	</h1>
+	{!open ? (
+		<p>This challenge is not open for entries.</p>
+	) : (
+		<form
+			data-challenge-upload
+			data-slug={challenge.slug}
+			data-fallback-title={`${username}'s entry for ${plainTitle}`}
+		>
+			{paused && <PausedNotice message={paused} />}
+			<fieldset disabled={Boolean(paused)} data-challenge-upload-fields>
+				<label for="challenge-blueprint">Blueprint exchange string</label>
+				<textarea
+					class="mono"
+					id="challenge-blueprint"
+					name="blueprint"
+					rows="8"
+					placeholder="Paste a single blueprint..."
+					required
+				></textarea>
+				<small>
+					The entry is public and named after the blueprint's label; change its title and
+					description on its page. Your earlier entry, if any, is replaced.
+				</small>
+				{/* Enabled by challenge-upload.ts. */}
+				<button type="submit" disabled>
+					Upload and enter
+				</button>
+			</fieldset>
+			<TermsNote verb="uploading" />
+			<p data-challenge-upload-status role="status" aria-live="polite"></p>
+		</form>
+	)}
+</Page>
+
+<script>
+	import "@components/challenge/challenge-upload.ts";
+</script>
+
+<style>
+	.back {
+		margin-bottom: 1rem;
+	}
+	.back a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+	.enter-heading {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+	fieldset small {
+		display: block;
+		margin-bottom: var(--pico-spacing);
+	}
+</style>

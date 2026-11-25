@@ -1,0 +1,30 @@
+---
+import BlueprintIcon from "@components/common/BlueprintIcon.astro";
+import type { NodeKind } from "@lib/api";
+import { nodeKindLabel } from "@lib/planners";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+
+interface Props {
+	level: "h1" | "h2";
+	icons: string;
+	label: string;
+	/** Which item the icon is drawn on; a blueprint by default. */
+	kind?: NodeKind;
+}
+
+const { level: Heading, icons, label, kind = "blueprint" } = Astro.props;
+---
+
+<Heading class="blueprint-heading">
+	<BlueprintIcon kind={kind} icons={icons} />
+	<span set:html={formatRichText(label || `Untitled ${nodeKindLabel(kind).toLowerCase()}`)} />
+</Heading>
+
+<style>
+	.blueprint-heading {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 1.5rem;
+	}
+</style>

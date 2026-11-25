@@ -1,0 +1,36 @@
+---
+// One condition: label, optional detail (duration, station) or signal comparison.
+import type { ScheduleWaitCondition } from "@lib/api";
+import GameIcon from "@factorio-expo/ui/game/GameIcon.astro";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { describeCondition, signalIcon } from "@utils/schedule.ts";
+import "./schedule-tree.css";
+
+interface Props {
+	condition: ScheduleWaitCondition;
+}
+
+const view = describeCondition(Astro.props.condition);
+const first = signalIcon(view.comparison?.first_signal);
+const second = signalIcon(view.comparison?.second_signal);
+---
+
+<span class="st-cond">
+	<span>{view.label}</span>
+	{view.detail && <strong set:html={formatRichText(view.detail)} />}
+	{view.comparison && (
+		<span class="st-cmp">
+			{first ? (
+				<GameIcon prototypeType={first.type} name={first.name} quality={first.quality} />
+			) : (
+				"…"
+			)}
+			<span>{view.comparison.comparator ?? "<"}</span>
+			{second ? (
+				<GameIcon prototypeType={second.type} name={second.name} quality={second.quality} />
+			) : (
+				<strong>{view.comparison.constant ?? 0}</strong>
+			)}
+		</span>
+	)}
+</span>

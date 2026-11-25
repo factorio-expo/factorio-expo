@@ -1,0 +1,26 @@
+---
+// Who can see an owned entry (`visibility`). Only for signed-in creators: an
+// anonymous entry is always public, so anonymous forms leave this out.
+import type { Visibility } from "@lib/api";
+
+interface Props {
+	id: string;
+	selected?: Visibility;
+}
+
+const { id, selected = "public" } = Astro.props;
+const options: { value: Visibility; label: string }[] = [
+	{ value: "public", label: "Public (listed and searchable)" },
+	{ value: "unlisted", label: "Unlisted (anyone with the link)" },
+	{ value: "private", label: "Private (only you)" },
+];
+---
+
+<label for={id}>Visibility</label>
+<select id={id} name="visibility">
+	{options.map(({ value, label }) => (
+		<option value={value} selected={value === selected}>
+			{label}
+		</option>
+	))}
+</select>

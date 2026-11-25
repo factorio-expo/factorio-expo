@@ -1,0 +1,157 @@
+---
+interface Props {
+	label?: string;
+	total: number;
+	limit: number;
+	offset: number;
+	href: (offset: number) => string;
+}
+
+import ChevronFirst from "@lucide/astro/icons/chevron-first";
+import ChevronLeft from "@lucide/astro/icons/chevron-left";
+import ChevronRight from "@lucide/astro/icons/chevron-right";
+import ChevronLast from "@lucide/astro/icons/chevron-last";
+
+const { total, limit, offset, href, label = "Search result pages" } = Astro.props;
+const pageCount = Math.ceil(total / limit);
+const currentPage = Math.floor(offset / limit) + 1;
+const firstVisible = Math.max(1, Math.min(currentPage - 2, pageCount - 4));
+const lastVisible = Math.min(pageCount, firstVisible + 4);
+const pages = Array.from(
+	{ length: Math.max(0, lastVisible - firstVisible + 1) },
+	(_, i) => firstVisible + i,
+);
+const controls = [
+	{ name: "First page", icon: ChevronFirst, offset: 0, disabled: currentPage === 1 },
+	{
+		name: "Previous page",
+		icon: ChevronLeft,
+		offset: offset - limit,
+		disabled: currentPage === 1,
+	},
+];
+const nextControls = [
+	{
+		name: "Next page",
+		icon: ChevronRight,
+		offset: offset + limit,
+		disabled: currentPage === pageCount,
+	},
+	{
+		name: "Last page",
+		icon: ChevronLast,
+		offset: (pageCount - 1) * limit,
+		disabled: currentPage === pageCount,
+	},
+];
+---
+
+{pageCount > 1 && (
+	<nav class="pagination" aria-label={label}>
+		{controls.map((control) => {
+			const Icon = control.icon;
+			return control.disabled ? (
+				<span class="page-control disabled" aria-disabled="true" aria-label={control.name}>
+					<Icon />
+				</span>
+			) : (
+				<a class="page-control" href={href(control.offset)} aria-label={control.name}>
+					<Icon />
+				</a>
+			);
+		})}
+		{firstVisible > 1 && (
+			<a class="page-control" href={href(0)} aria-label="Page 1">
+				1
+			</a>
+		)}
+		{firstVisible > 2 && (
+			<span class="ellipsis" aria-hidden="true">
+				&hellip;
+			</span>
+		)}
+		{pages.map((page) =>
+			page === currentPage ? (
+				<span class="page-control current" aria-current="page" aria-label={`Page ${page}`}>
+					{page}
+				</span>
+			) : (
+				<a class="page-control" href={href((page - 1) * limit)} aria-label={`Page ${page}`}>
+					{page}
+				</a>
+			),
+		)}
+		{lastVisible < pageCount - 1 && (
+			<span class="ellipsis" aria-hidden="true">
+				&hellip;
+			</span>
+		)}
+		{lastVisible < pageCount && (
+			<a
+				class="page-control"
+				href={href((pageCount - 1) * limit)}
+				aria-label={`Page ${pageCount}`}
+			>
+				{pageCount}
+			</a>
+		)}
+		{nextControls.map((control) => {
+			const Icon = control.icon;
+			return control.disabled ? (
+				<span class="page-control disabled" aria-disabled="true" aria-label={control.name}>
+					<Icon />
+				</span>
+			) : (
+				<a class="page-control" href={href(control.offset)} aria-label={control.name}>
+					<Icon />
+				</a>
+			);
+		})}
+	</nav>
+)}
+
+<style>
+	.pagination {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		align-items: center;
+		gap: 0.4rem;
+		margin-top: 1.5rem;
+	}
+
+	.page-control {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 2.5rem;
+		min-height: 2.5rem;
+		margin: 0;
+		padding: 0.4rem 0.65rem;
+		border: 1px solid var(--pico-form-element-border-color);
+		border-radius: 0.5rem;
+		text-decoration: none;
+	}
+
+	a.page-control:hover,
+	a.page-control:focus-visible {
+		background: var(--pico-secondary-hover-background);
+		color: var(--pico-secondary-inverse);
+	}
+
+	.current {
+		background: var(--pico-primary-background);
+		border-color: var(--pico-primary-border);
+		color: var(--pico-primary-inverse);
+		font-weight: 600;
+	}
+
+	.disabled,
+	.ellipsis {
+		color: var(--pico-muted-color);
+	}
+
+	.disabled {
+		opacity: 0.6;
+	}
+</style>

@@ -1,0 +1,173 @@
+---
+// One material cell. Compact view: icon + rate; the name (and, for
+// intermediates, the output - input breakdown) is a tooltip on hover, focus
+// or tap. With "Show names" on, the same detail is printed inline. A product's
+// or intermediate's output also shows per tile and per MW when the leaf has a
+// footprint and consumes electricity.
+import type { MaterialRate } from "@lib/api";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { materialIconToken } from "@utils/production.ts";
+import ProductionRate from "./ProductionRate.astro";
+
+interface Props {
+	material: MaterialRate;
+	variant: "ingredient" | "intermediate" | "product";
+	/** The leaf's footprint area, for the output per tile. */
+	tiles?: number;
+	/** The electricity the leaf consumes in MW, for the output per MW. */
+	megawatts?: number;
+}
+
+const { material, variant, tiles, megawatts } = Astro.props;
+const net = material.difference_per_second ?? 0;
+const output = variant === "ingredient" ? undefined : material.output_per_second;
+---
+
+<li class="cell" tabindex="0">
+	<span class="cell-icon" set:html={formatRichText(materialIconToken(material))} />
+	{variant === "ingredient" ? (
+		<span class="rate rate--in">
+			<ProductionRate value={-(material.input_per_second ?? 0)} type={material.type} />
+		</span>
+	) : variant === "product" ? (
+		<span class="rate rate--out">
+			<ProductionRate value={material.output_per_second} type={material.type} />
+		</span>
+	) : (
+		<span class:list={["rate", { "rate--in": net < 0, "rate--out": net > 0 }]}>
+			<ProductionRate value={net} type={material.type} />
+		</span>
+	)}
+	<span class="pop">
+		<span class="name">{material.name}</span>
+		{variant === "intermediate" && (
+			<span class="calc">
+				<span class="rate rate--out" title="Output">
+					<ProductionRate value={material.output_per_second} type={material.type} />
+				</span>
+				<span> − </span>
+				<span class="rate rate--in" title="Input">
+					<ProductionRate value={material.input_per_second} type={material.type} />
+				</span>
+			</span>
+		)}
+		{output !== undefined && tiles !== undefined && (
+			<span class="ratio" data-rate-per-tile>
+				<ProductionRate value={output / tiles} type={material.type} ratio /> per tile
+			</span>
+		)}
+		{output !== undefined && megawatts !== undefined && (
+			<span class="ratio" data-rate-per-mw>
+				<ProductionRate value={output / megawatts} type={material.type} ratio /> per MW
+			</span>
+		)}
+	</span>
+</li>
+
+<style>
+	.cell {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		flex: 0 1 auto;
+		min-width: 5.5rem;
+		padding: 0.2rem 0.4rem;
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-card-background-color, var(--pico-background-color));
+		list-style: none;
+	}
+
+	.cell-icon {
+		display: block;
+		flex: none;
+		width: 1.5rem;
+		height: 1.5rem;
+		overflow: hidden;
+		font-size: 0;
+	}
+
+	.cell-icon :global(.icon) {
+		width: 1.5rem;
+		height: 1.5rem;
+		font-size: 1.5rem;
+	}
+
+	.rate {
+		font-size: 0.8rem;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+
+	.rate--in {
+		color: var(--pico-del-color, #c62828);
+	}
+
+	.rate--out {
+		color: var(--pico-ins-color, #2e7d32);
+	}
+
+	.cell > .rate {
+		margin-left: auto;
+		padding-left: 0.25rem;
+	}
+
+	:global([data-production][data-names]) .cell {
+		flex: 1 1 15rem;
+	}
+
+	.name {
+		font-size: 0.875rem;
+	}
+
+	.calc,
+	.ratio {
+		font-size: 0.75rem;
+	}
+
+	.ratio {
+		color: var(--pico-muted-color);
+	}
+
+	/* Tooltip (compact view). */
+	.pop {
+		position: absolute;
+		z-index: 10;
+		bottom: calc(100% + 0.25rem);
+		left: 0;
+		display: none;
+		flex-direction: column;
+		padding: 0.25rem 0.5rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-card-background-color, var(--pico-background-color));
+		box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+		pointer-events: none;
+		white-space: nowrap;
+	}
+
+	.cell:hover .pop,
+	.cell:focus .pop {
+		display: flex;
+	}
+
+	/* "Show names" view: detail inline, no tooltip. */
+	:global([data-production][data-names]) .pop {
+		position: static;
+		display: flex;
+		flex: 1 1 auto;
+		min-width: 0;
+		order: 1;
+		padding: 0;
+		border: 0;
+		background: none;
+		box-shadow: none;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+
+	:global([data-production][data-names]) .cell > .rate {
+		order: 2;
+		margin-left: 0;
+	}
+</style>

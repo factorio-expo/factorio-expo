@@ -1,0 +1,139 @@
+---
+// The owner's profile form: replaces the name block while open (the pencil in
+// ProfileLayout), like an entry page's details form. The status line (with
+// the icon picker) and one name per social site, each on its own line beside
+// the site's mark. Only names are typed; the API builds the links.
+// profile-edit.ts saves it and reloads the page.
+import Save from "@lucide/astro/icons/save";
+import X from "@lucide/astro/icons/x";
+import IconPicker from "@factorio-expo/ui/game/icon-picker/IconPicker.astro";
+import type { PublicUser } from "@lib/api";
+import { SOCIAL_PLATFORMS, socialBrandStyle } from "@lib/social-links";
+
+interface Props {
+	user: PublicUser;
+}
+const { user } = Astro.props;
+const STATUS_MAX = 140;
+const handles = new Map(user.links.map((link) => [link.platform, link.handle]));
+---
+
+<form data-profile-form hidden>
+	<IconPicker targetId="profile-status">
+		<label slot="label" for="profile-status">
+			Status <small>(one line, icons like [item=iron-plate])</small>
+		</label>
+		<input
+			id="profile-status"
+			name="status"
+			type="text"
+			maxlength={STATUS_MAX}
+			value={user.status}
+			placeholder="Building a 10k SPM megabase on [planet=gleba]"
+			autocomplete="off"
+		/>
+	</IconPicker>
+	<fieldset>
+		<legend>
+			Social links <small>(your name on each site, not a link)</small>
+		</legend>
+		{SOCIAL_PLATFORMS.map((info) => (
+			<div class="link-field">
+				<span
+					class="brand"
+					title={info.label}
+					aria-hidden="true"
+					style={socialBrandStyle(info)}
+				/>
+				<input
+					type="text"
+					name={`link-${info.platform}`}
+					data-link-platform={info.platform}
+					value={handles.get(info.platform) ?? ""}
+					placeholder={`${info.label} name`}
+					aria-label={`${info.label} name`}
+					autocomplete="off"
+					spellcheck="false"
+				/>
+			</div>
+		))}
+	</fieldset>
+	<p class="note">
+		Your status and links are public on this page; deleting your account deletes them.
+	</p>
+	<div class="form-actions">
+		<button type="submit" class="save">
+			<Save aria-hidden="true" />
+			Save
+		</button>
+		<button type="button" class="secondary outline cancel" data-profile-cancel>
+			<X aria-hidden="true" />
+			Cancel
+		</button>
+	</div>
+	<p data-profile-status-line role="status" aria-live="polite"></p>
+</form>
+
+<script>
+	import "./profile-edit.ts";
+</script>
+
+<style>
+	form {
+		max-width: 36rem;
+		margin-bottom: 1rem;
+	}
+	legend small,
+	label small,
+	.note {
+		color: var(--pico-muted-color);
+	}
+	.note {
+		font-size: 0.875em;
+	}
+	.link-field {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 0.5rem;
+	}
+	.link-field input {
+		margin: 0;
+	}
+	.brand {
+		flex: none;
+		width: 1.4rem;
+		height: 1.4rem;
+		background-color: var(--brand, currentColor);
+		mask: var(--logo) center / contain no-repeat;
+	}
+	:global(:root[data-theme="dark"]) .brand {
+		background-color: var(--brand-dark, var(--brand, currentColor));
+	}
+	/* The same actions row as an entry's details form (EntryMetadata). */
+	.form-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin-top: 0.75rem;
+	}
+	.save,
+	.cancel {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: auto;
+		margin: 0;
+		padding: 0.45rem 0.75rem;
+		font-size: 0.875rem;
+	}
+	.save :global(svg),
+	.cancel :global(svg) {
+		width: 1.15rem;
+		height: 1.15rem;
+		flex: none;
+	}
+	[data-profile-status-line]:empty {
+		margin: 0;
+	}
+</style>

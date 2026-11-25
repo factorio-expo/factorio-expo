@@ -1,0 +1,65 @@
+---
+// The console's front page: what needs attention (reports, failed jobs), the
+// pipeline, and the containers' resource usage (from Dozzle).
+// Both blocks refresh every 5 s from their partials (src/scripts/poll.ts).
+import { ADMIN_DOZZLE_URL, ADMIN_LOGS_URL } from "astro:env/server";
+import ExternalLink from "@lucide/astro/icons/external-link";
+
+import OverviewStatus from "@components/OverviewStatus.astro";
+import ResourceUsage from "@components/ResourceUsage.astro";
+import Console from "@layouts/Console.astro";
+import { loadFromApi } from "@lib/api/page";
+import { readResourceUsage } from "@lib/dozzle";
+
+const [loaded, resources] = await Promise.all([
+	loadFromApi(Astro, (api) => api.overview()),
+	ADMIN_DOZZLE_URL ? readResourceUsage(ADMIN_DOZZLE_URL) : undefined,
+]);
+const overview = loaded.data;
+---
+
+<Console title="Overview" nav="overview">
+	{loaded.error && (
+		<p class="error" role="alert">
+			{loaded.error}
+		</p>
+	)}
+	{overview && (
+		<div class="stack">
+			<div class="stack" data-poll="/partials/overview" data-poll-seconds="5">
+				<OverviewStatus overview={overview} />
+			</div>
+
+			{ADMIN_DOZZLE_URL && (
+				<section class="panel" aria-labelledby="resources-heading">
+					<div class="panel-head">
+						<h2 id="resources-heading">
+							Resources <span class="live">live, every 5 s</span>
+						</h2>
+						{ADMIN_LOGS_URL && (
+							<a href={ADMIN_LOGS_URL} target="_blank" rel="noopener noreferrer">
+								Logs <ExternalLink class="icon" aria-label="(new tab)" />
+							</a>
+						)}
+					</div>
+					<div data-poll="/partials/resources" data-poll-seconds="5">
+						<ResourceUsage resources={resources} />
+					</div>
+				</section>
+			)}
+		</div>
+	)}
+</Console>
+
+<script>
+	import "../scripts/poll.ts";
+</script>
+
+<style>
+	.live {
+		margin-left: 0.4rem;
+		font-size: 0.75rem;
+		font-weight: normal;
+		color: var(--pico-muted-color);
+	}
+</style>

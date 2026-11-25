@@ -1,0 +1,62 @@
+---
+// "Similar blueprints": six live public blueprints that make the same top
+// product, closest production rate first (the API's similar_to search), and a
+// link to the full list on /browse. Nothing is shown while the blueprint has
+// no analysis, is not public, or has no similar blueprint.
+import EntryGrid from "@components/entry/EntryGrid.astro";
+import { getServerApiClient } from "@lib/api/server";
+import { toCard } from "@utils/entry-card.ts";
+
+interface Props {
+	/** The blueprint the strip is about. */
+	leafId: string;
+	/** Whether its analysis is finished: similarity compares what the analysis found. */
+	analysed: boolean;
+}
+
+const { leafId, analysed } = Astro.props;
+const SIZE = 6;
+const similar = analysed
+	? await getServerApiClient(Astro)
+			.search.query({ similar_to: leafId, kind: "blueprint", limit: SIZE })
+			.catch(() => undefined)
+	: undefined;
+// Tags and mod badges are left off the compact cards.
+const cards = (similar?.results ?? []).map((card) =>
+	toCard(card, { tags: () => [], modBadges: () => [] }),
+);
+---
+
+{cards.length > 0 && similar && (
+	<section class="similar" aria-labelledby="similar-title" data-similar>
+		<div class="heading">
+			<h2 id="similar-title">Similar blueprints</h2>
+			<a href={`/browse?similar_to=${encodeURIComponent(leafId)}`} data-similar-all>
+				{similar.total > SIZE
+					? `See all ${similar.total.toLocaleString("en-US")}`
+					: "Open in browse"}
+			</a>
+		</div>
+		<EntryGrid cards={cards} eager={0} headingLevel={3} />
+	</section>
+)}
+
+<style>
+	.similar {
+		margin-top: 2rem;
+	}
+
+	.heading {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.25rem 1rem;
+		margin-bottom: 1rem;
+	}
+
+	.heading h2 {
+		margin: 0;
+		font-size: 1.25rem;
+	}
+</style>

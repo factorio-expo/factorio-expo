@@ -1,0 +1,215 @@
+---
+// The owner's view of one collection, server-rendered: name, description
+// (Markdown and icons), visibility and share link, edited together through one
+// form behind the pencil (collection-edit.ts); the entries below are
+// CollectionEntries, drag to reorder in place.
+import { assetUrl } from "@lib/api/public-asset";
+import ArrowLeft from "@lucide/astro/icons/arrow-left";
+import Folder from "@lucide/astro/icons/folder";
+import Pencil from "@lucide/astro/icons/pencil";
+import Save from "@lucide/astro/icons/save";
+import X from "@lucide/astro/icons/x";
+import CollectionEntries from "@components/account/CollectionEntries.svelte";
+import IconPicker from "@factorio-expo/ui/game/icon-picker/IconPicker.astro";
+import MarkdownEditor from "@factorio-expo/ui/forms/markdown-editor/MarkdownEditor.astro";
+import Page from "@layouts/Page.astro";
+import { ApiError } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server.ts";
+import { getViewer, redirectToLoginUnlessSignedIn } from "@lib/viewer";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { renderMarkdown } from "@utils/markdown";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+
+const redirect = await redirectToLoginUnlessSignedIn(Astro);
+if (redirect) return redirect;
+const { collectionId } = Astro.params;
+let collection;
+try {
+	collection = await getServerApiClient(Astro).collections.get(collectionId!);
+} catch (err) {
+	if (err instanceof ApiError && err.status === 404) return Astro.rewrite("/404");
+	throw err;
+}
+const viewer = await getViewer(Astro);
+// Someone else's public collection has its own page.
+if (viewer.state !== "in" || viewer.user.user_id !== collection.user_id) {
+	return Astro.redirect(`/collections/${collection.id}`);
+}
+const rows = (collection.entries ?? []).map((entry) => ({
+	id: entry.id,
+	title: stripRichText(entry.title || entry.label).trim() || "Untitled blueprint",
+	image: entry.preview_url ? assetUrl(entry.preview_url) : undefined,
+}));
+// The public origin, not the request's (internal behind a proxy or port mapping).
+const shareUrl = new URL(`/collections/${collection.id}`, Astro.site ?? Astro.url).href;
+---
+
+<Page title={stripRichText(collection.name)} nav="collections" noindex>
+	<nav class="back">
+		<a href="/account/collections">
+			<ArrowLeft aria-hidden="true" /> All collections
+		</a>
+	</nav>
+	<section data-collection data-collection-id={collection.id}>
+		<div data-collection-display>
+			<h1 class="collection-title">
+				<Folder aria-hidden="true" class="folder" />
+				<span set:html={formatRichText(collection.name)} />
+				<button
+					type="button"
+					class="icon-button"
+					data-edit-collection
+					aria-label="Edit collection"
+					data-tooltip="Edit name, description and visibility"
+				>
+					<Pencil aria-hidden="true" />
+				</button>
+			</h1>
+			<p class="visibility" data-visibility={collection.visibility}>
+				{collection.visibility === "public" ? "Public" : "Private"}
+			</p>
+			{collection.description && (
+				<div class="description" set:html={renderMarkdown(collection.description)} />
+			)}
+			{collection.visibility === "public" && (
+				<p class="share">
+					Shareable link: <a href={`/collections/${collection.id}`}>{shareUrl}</a>
+				</p>
+			)}
+		</div>
+		<form data-collection-form hidden>
+			<IconPicker targetId="collection-name">
+				<label slot="label" for="collection-name">
+					Name <small>(icons like [item=iron-plate])</small>
+				</label>
+				<input
+					id="collection-name"
+					name="name"
+					maxlength="100"
+					required
+					autocomplete="off"
+					value={collection.name}
+				/>
+			</IconPicker>
+			<IconPicker targetId="collection-description">
+				<label slot="label" for="collection-description">
+					Description <small>(optional, Markdown and icons like [item=iron-plate])</small>
+				</label>
+				<MarkdownEditor
+					id="collection-description"
+					value={collection.description}
+					maxlength={2000}
+				/>
+			</IconPicker>
+			<label for="collection-visibility">Visibility</label>
+			<select id="collection-visibility" name="visibility">
+				<option value="private" selected={collection.visibility === "private"}>
+					Private
+				</option>
+				<option value="public" selected={collection.visibility === "public"}>
+					Public
+				</option>
+			</select>
+			<div class="form-actions">
+				<button type="submit" class="save">
+					<Save aria-hidden="true" />
+					Save
+				</button>
+				<button type="button" class="secondary outline cancel" data-cancel-collection>
+					<X aria-hidden="true" />
+					Cancel
+				</button>
+			</div>
+		</form>
+		<p data-collection-status role="status" aria-live="polite"></p>
+		<CollectionEntries collectionId={collection.id} initial={rows} client:load />
+	</section>
+</Page>
+
+<script>
+	import "@components/account/collection-edit.ts";
+</script>
+
+<style>
+	.back {
+		margin-bottom: 1rem;
+	}
+	.back a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+	.back :global(svg) {
+		width: 1rem;
+		height: 1rem;
+	}
+	:global([data-collection] [hidden]) {
+		display: none !important;
+	}
+	.collection-title {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin-bottom: 0.5rem;
+		overflow-wrap: anywhere;
+	}
+	.collection-title > span {
+		min-width: 0;
+		flex: 1;
+	}
+	.collection-title :global(.folder) {
+		flex: none;
+		width: 1.6rem;
+		height: 1.6rem;
+		color: var(--pico-muted-color);
+	}
+	[data-edit-collection] {
+		margin: -0.5rem 0;
+	}
+	.visibility {
+		margin-bottom: 0.75rem;
+		color: var(--pico-muted-color);
+		font-size: 0.875rem;
+	}
+	.description {
+		min-width: 0;
+		margin-bottom: 0.75rem;
+		overflow-wrap: anywhere;
+	}
+	.description :global(> :last-child) {
+		margin-bottom: 0;
+	}
+	form {
+		max-width: 36rem;
+		margin-bottom: 1rem;
+	}
+	label small {
+		color: var(--pico-muted-color);
+	}
+	.form-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin-top: 0.75rem;
+	}
+	.save,
+	.cancel {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: auto;
+		margin: 0;
+		padding: 0.45rem 0.75rem;
+		font-size: 0.875rem;
+	}
+	.save :global(svg),
+	.cancel :global(svg) {
+		width: 1.15rem;
+		height: 1.15rem;
+		flex: none;
+	}
+	[data-collection-status]:empty {
+		margin: 0;
+	}
+</style>

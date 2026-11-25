@@ -1,0 +1,29 @@
+{
+	"name": "expo-e2e",
+	"version": "0.0.1",
+	"private": true,
+	"description": "Black-box end-to-end tests of the whole stack (docker compose) with Playwright.",
+	"type": "module",
+	"scripts": {
+		"test": "playwright test",
+		"test:ui": "playwright test --ui",
+		"test:recovery": "playwright test --config recovery.config.ts",
+		"report": "playwright show-report",
+		"stack:up": "node support/stack-cli.ts up",
+		"stack:down": "node support/stack-cli.ts down",
+		"stack:logs": "node support/stack-cli.ts logs",
+		"typecheck": "tsc --noEmit",
+		"lint": "oxlint --fix",
+		"lint:check": "oxlint",
+		"format": "oxfmt --write .",
+		"format:check": "oxfmt --check"
+	},
+	"devDependencies": {
+		"@playwright/test": "1.65.1",
+		"@types/node": "catalog:",
+		"typescript": "catalog:"
+	},
+	"engines": {
+		"node": ">=26"
+	}
+}

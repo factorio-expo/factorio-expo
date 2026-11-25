@@ -1,0 +1,65 @@
+---
+// Footprint filter: entries whose every blueprint fits in W x H tiles,
+// either way round. One bound alone limits the shorter side. Entries not
+// measured yet (and planners) never match.
+import { MAX_FOOTPRINT } from "@lib/search/query";
+
+interface Props {
+	width: number | null;
+	height: number | null;
+}
+
+const { width, height } = Astro.props;
+---
+
+<fieldset class="footprint-filter">
+	<legend>Fits in (tiles)</legend>
+	<div class="bounds">
+		<input
+			type="number"
+			name="footprint_width"
+			min="1"
+			max={MAX_FOOTPRINT}
+			step="1"
+			inputmode="numeric"
+			placeholder="Width"
+			aria-label="Maximum width in tiles"
+			value={width ?? ""}
+		/>
+		<span aria-hidden="true">×</span>
+		<input
+			type="number"
+			name="footprint_height"
+			min="1"
+			max={MAX_FOOTPRINT}
+			step="1"
+			inputmode="numeric"
+			placeholder="Height"
+			aria-label="Maximum height in tiles"
+			value={height ?? ""}
+		/>
+	</div>
+</fieldset>
+
+<style>
+	.footprint-filter {
+		margin: 0;
+		min-width: 0;
+	}
+	.footprint-filter legend {
+		margin-bottom: 0.5rem;
+	}
+	.bounds {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.bounds input {
+		flex: 1;
+		min-width: 0;
+		margin: 0;
+	}
+	.bounds span {
+		color: var(--pico-muted-color);
+	}
+</style>

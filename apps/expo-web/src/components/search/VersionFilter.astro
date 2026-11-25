@@ -1,0 +1,46 @@
+---
+// Game version filter: one release family or any. A single-choice picker like
+// the kind filter's (MultiSelect `single`), each option with how many results
+// the search has of that family.
+import MultiSelect from "@components/form/MultiSelect.astro";
+
+interface Props {
+	/** The chosen family's value, "" for any version. */
+	selected: string;
+	/** Matches per family, counted without the version filter; absent without results. */
+	counts?: Record<string, number>;
+}
+
+const { selected, counts } = Astro.props;
+// The API's release families.
+const FAMILIES = [
+	{ value: "", label: "Any version" },
+	{ value: "pre-2.0", label: "Before 2.0 (0.x, 1.x)" },
+	{ value: "v2.0", label: "v2.0" },
+	{ value: "v2.1", label: "v2.1" },
+	{ value: "v2.1-compatible", label: "v2.1 and 2.1 compatible" },
+];
+const options = FAMILIES.map((option) =>
+	counts && option.value
+		? Object.assign({}, option, { count: counts[option.value] ?? 0 })
+		: option,
+);
+---
+
+<div class="version-filter">
+	<MultiSelect
+		id="search-game-version"
+		name="game_version"
+		label="Game version"
+		options={options}
+		selected={[selected]}
+		single
+	/>
+</div>
+
+<style>
+	/* As in KindFilter: the grid resets direct children only. */
+	.version-filter :global(.multiselect) {
+		margin: 0;
+	}
+</style>

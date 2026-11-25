@@ -1,0 +1,86 @@
+---
+// The bug button's dialog, on every page (Page.astro): what went wrong, an
+// optional contact address, and the page's context shown before it is sent
+// (the path, and on an entry page what ProblemContext.astro adds). Any
+// element with data-problem-report-open opens it (the header's bug icon,
+// the footer link, the leaf page's "Report a problem with this preview").
+// Staff review the reports in the console (docs/admin.md#problem-reports).
+// Behaviour in problem-report.ts.
+import HumanCheck from "@components/common/HumanCheck.astro";
+import ModalDialog from "@components/common/ModalDialog.astro";
+---
+
+<div class="problem-report" data-problem-report>
+	<ModalDialog titleId="problem-report-title" title="Report a problem" closeLabel="Close">
+		<form data-problem-report-form>
+			<label>
+				What went wrong?
+				<textarea
+					name="body"
+					rows="5"
+					maxlength="4000"
+					required
+					placeholder="What you did, what you expected and what happened instead."
+				></textarea>
+			</label>
+			<label>
+				Email <small>(optional)</small>
+				<input type="email" name="email" maxlength="254" autocomplete="email" />
+				<small>
+					Only if you want a reply about this report. It is used for nothing else and
+					deleted when the report is resolved, or after 30 days. See the
+					<a href="/privacy-policy#problem-reports">privacy policy</a>.
+				</small>
+			</label>
+			<details class="problem-context">
+				<summary>Sent with your report</summary>
+				<dl data-problem-report-context></dl>
+				<small>And your browser's name and version (its user agent).</small>
+			</details>
+			<p class="problem-privacy">
+				Admins read every report. To fix one they may copy its text and page details, never
+				your email, to the public issue tracker, so leave personal details out.
+			</p>
+			<HumanCheck action="problem-report" />
+			<button type="submit">Send report</button>
+			<p data-problem-report-status role="status" aria-live="polite"></p>
+		</form>
+		<div data-problem-report-done hidden role="status">
+			<p>Thanks, it is on the admins' list.</p>
+			<p data-problem-report-reply hidden></p>
+		</div>
+	</ModalDialog>
+</div>
+
+<script>
+	import "./problem-report.ts";
+</script>
+
+<style>
+	.problem-report {
+		display: contents;
+	}
+	.problem-context,
+	.problem-privacy {
+		font-size: 0.85rem;
+	}
+	.problem-privacy {
+		color: var(--pico-muted-color);
+	}
+	.problem-context dl {
+		display: grid;
+		grid-template-columns: max-content 1fr;
+		gap: 0.15rem 0.75rem;
+		margin: 0.5rem 0;
+	}
+	.problem-context dt {
+		color: var(--pico-muted-color);
+	}
+	.problem-context dd {
+		margin: 0;
+		overflow-wrap: anywhere;
+	}
+	[data-problem-report-status]:empty {
+		display: none;
+	}
+</style>

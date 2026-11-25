@@ -1,0 +1,43 @@
+{
+	"name": "expo-admin",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "astro dev",
+		"build": "astro build",
+		"preview": "astro preview",
+		"astro": "astro",
+		"lint": "oxlint --fix",
+		"lint:check": "oxlint",
+		"format": "oxfmt --write .",
+		"format:check": "oxfmt --check",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@astrojs/node": "catalog:",
+		"@astrojs/svelte": "catalog:",
+		"@factorio-expo/api-types": "workspace:*",
+		"@factorio-expo/ui": "workspace:*",
+		"@lucide/astro": "catalog:",
+		"@lucide/svelte": "catalog:",
+		"@picocss/pico": "catalog:",
+		"astro": "catalog:",
+		"flatpickr": "^4.6.13",
+		"jose": "catalog:",
+		"openapi-fetch": "catalog:",
+		"sass": "catalog:",
+		"svelte": "catalog:"
+	},
+	"devDependencies": {
+		"@astrojs/check": "catalog:",
+		"@astrojs/compiler-rs": "catalog:",
+		"@types/node": "catalog:",
+		"@typescript/typescript6": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	},
+	"engines": {
+		"node": ">=26"
+	}
+}

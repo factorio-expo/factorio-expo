@@ -1,0 +1,13 @@
+---
+// A vanity alias, /@{username}/{slug}: the owner's chosen short name for one
+// entry. The page is the entry's own (rewritten to /e/{id}, so the URL stays),
+// and its canonical link names /e/{id}. Changing or clearing the alias makes
+// the old one a 404: the API no longer finds it (docs/api.md#vanity-aliases).
+import { getServerApiClient } from "@lib/api/server";
+import { unlessMissing } from "@lib/entry-access";
+
+const { username, slug } = Astro.params;
+const target = await unlessMissing(getServerApiClient(Astro).users.aliasTarget(username!, slug!));
+if (!target) return Astro.rewrite("/404");
+return Astro.rewrite(`/e/${target.entry_id}${Astro.url.search}`);
+---

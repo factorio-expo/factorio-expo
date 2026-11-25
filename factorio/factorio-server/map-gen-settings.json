@@ -1,0 +1,21 @@
+{
+  "peaceful_mode": true,
+  "no_enemies_mode": true,
+  "autoplace_controls": {
+    "enemy-base": {
+      "frequency": 0.01,
+      "size": 0.01,
+      "richness": 1
+    },
+    "trees": {
+      "frequency": 0.01,
+      "size": 0.01,
+      "richness": 1
+    },
+    "rocks": {
+      "frequency": 0.01,
+      "size": 0.01,
+      "richness": 1
+    }
+  }
+}

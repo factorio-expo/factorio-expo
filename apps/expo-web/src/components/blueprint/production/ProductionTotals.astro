@@ -1,0 +1,103 @@
+---
+// Power (made, used, net) and pollution summary above the material columns.
+import type { Production } from "@lib/api";
+import { formatPower } from "@utils/production.ts";
+import ProductionRate from "./ProductionRate.astro";
+
+interface Props {
+	production: Production;
+}
+
+const { production } = Astro.props;
+const pollution = production.pollution;
+const pollutants = pollution?.by_pollutant?.length
+	? pollution.by_pollutant
+	: pollution && !pollution.not_applicable
+		? [
+				{
+					pollutant: pollution.pollutant ?? "pollution",
+					net_per_second: pollution.net_per_second,
+				},
+			]
+		: [];
+---
+
+{(production.electricity || pollutants.length > 0) && (
+	<dl class="production-totals">
+		{production.electricity && (
+			<>
+				<div>
+					<dt>Power made</dt>
+					<dd>
+						<span
+							data-production-power={production.electricity.production_watts ?? 0}
+							data-power="production"
+						>
+							{formatPower(production.electricity.production_watts ?? 0)}
+						</span>
+					</dd>
+				</div>
+				<div>
+					<dt>Power used</dt>
+					<dd>
+						<span
+							data-production-power={production.electricity.consumption_watts ?? 0}
+							data-power="consumption"
+						>
+							{formatPower(production.electricity.consumption_watts ?? 0)}
+						</span>
+					</dd>
+				</div>
+				<div>
+					<dt>Net power</dt>
+					<dd>
+						<span
+							data-production-power={production.electricity.net_watts}
+							data-power="net"
+						>
+							{formatPower(production.electricity.net_watts)}
+						</span>
+					</dd>
+				</div>
+			</>
+		)}
+		{pollutants.map((pollutant) => (
+			<div>
+				<dt>
+					{pollutant.pollutant === "spores"
+						? "Spores"
+						: pollutant.pollutant === "pollution"
+							? "Pollution"
+							: pollutant.pollutant}
+				</dt>
+				<dd>
+					<ProductionRate value={pollutant.net_per_second} type="pollution" />
+				</dd>
+			</div>
+		))}
+	</dl>
+)}
+
+<style>
+	.production-totals {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 1.5rem;
+		margin-top: 1rem;
+	}
+
+	.production-totals dt {
+		font-size: 0.8rem;
+		color: var(--pico-muted-color);
+	}
+
+	.production-totals dd {
+		margin: 0;
+	}
+
+	.production-totals > div {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+	}
+</style>

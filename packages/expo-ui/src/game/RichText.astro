@@ -1,0 +1,13 @@
+---
+// A user-written label or title as Factorio rich text (icons, colors, bold),
+// escaped by formatRichText; `fallback` (plain text) when it is empty.
+import { formatRichText } from "./rich-text.ts";
+
+interface Props {
+	text: string | undefined;
+	fallback?: string;
+}
+const { text, fallback = "" } = Astro.props;
+---
+
+{text ? <Fragment set:html={formatRichText(text)} /> : fallback}

@@ -1,0 +1,110 @@
+---
+// A row of read-only tag chips (entry cards, entry page); each chip links to
+// the browse page filtered by that tag. With `lines` the list is clamped to that
+// many rows of chips and the rest collapses into a "+N" chip (the clamp runs in
+// the browser; without it, rows past the limit are simply clipped).
+import { tagHref, type TagRef } from "@lib/tags";
+import TagChip from "./TagChip.astro";
+
+interface Props {
+	tags: TagRef[];
+	lines?: number;
+	label?: string;
+}
+
+const { tags, lines, label = "Tags" } = Astro.props;
+---
+
+{tags.length > 0 && (
+	<ul
+		class:list={["tag-list", { clamped: lines !== undefined }]}
+		aria-label={label}
+		data-tag-lines={lines}
+		style={lines !== undefined ? `--tag-lines: ${lines}` : undefined}
+	>
+		{tags.map((tag) => (
+			<li data-tag-item>
+				<TagChip label={tag.name} icon={tag.icon} href={tagHref(tag.slug)} />
+			</li>
+		))}
+		{lines !== undefined && (
+			<li class="more" data-tag-more hidden>
+				<TagChip label="+0" />
+			</li>
+		)}
+	</ul>
+)}
+
+<script>
+	/** Hides trailing chips until the list fits `lines` rows, then shows "+N". */
+	function clamp(list: HTMLElement) {
+		const lines = Number(list.dataset.tagLines);
+		const items = Array.from(list.querySelectorAll<HTMLElement>("[data-tag-item]"));
+		const more = list.querySelector<HTMLElement>("[data-tag-more]");
+		const chip = more?.querySelector<HTMLElement>(".tag-chip");
+		if (!more || !chip || items.length === 0) return;
+
+		const rows = () => {
+			const tops = new Set<number>();
+			for (const el of [...items, more]) if (!el.hidden) tops.add(el.offsetTop);
+			return tops.size;
+		};
+		for (const item of items) item.hidden = false;
+		more.hidden = true;
+		list.style.maxHeight = "none";
+
+		let hidden = 0;
+		while (rows() > lines && hidden < items.length) {
+			hidden += 1;
+			const names: string[] = [];
+			items.forEach((item, i) => {
+				item.hidden = i >= items.length - hidden;
+				if (item.hidden) names.push(item.textContent?.trim() ?? "");
+			});
+			chip.textContent = `+${hidden}`;
+			chip.title = names.join(", ");
+			more.hidden = false;
+		}
+		list.style.maxHeight = "";
+	}
+
+	for (const list of document.querySelectorAll<HTMLElement>("[data-tag-lines]")) {
+		if (list.dataset.bound === "true") continue;
+		list.dataset.bound = "true";
+		clamp(list);
+		let width = list.clientWidth;
+		new ResizeObserver(() => {
+			if (list.clientWidth === width) return;
+			width = list.clientWidth;
+			clamp(list);
+		}).observe(list);
+	}
+</script>
+
+<style>
+	.tag-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin: 0 0 var(--pico-typography-spacing-vertical);
+		padding: 0;
+		list-style: none;
+	}
+
+	/* Before the script runs (or without it): clip whole rows past the limit. */
+	.tag-list.clamped {
+		max-height: calc(var(--tag-lines) * 1.9rem);
+		overflow: hidden;
+	}
+
+	.tag-list li {
+		min-width: 0;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.tag-list li[hidden] {
+		display: none;
+	}
+</style>

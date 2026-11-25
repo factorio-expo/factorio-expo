@@ -1,0 +1,163 @@
+---
+// The home page's opening: what the site is, a search box that goes to the
+// browse page, quick ways in and the upload call to action.
+import Search from "@lucide/astro/icons/search";
+import Upload from "@lucide/astro/icons/upload";
+import TagChip from "@components/common/TagChip.astro";
+import TagList from "@components/common/TagList.astro";
+import type { TagRef } from "@lib/tags";
+
+interface Props {
+	/** Popular tags, offered as quick ways in (the same chips as everywhere else). */
+	tags: TagRef[];
+}
+const { tags } = Astro.props;
+---
+
+<section class="hero" aria-labelledby="hero-title">
+	<h1 id="hero-title">Factorio Expo</h1>
+	<p class="tagline">Find, preview and share Factorio blueprints</p>
+	<p class="lead">
+		Rendered previews, production rates and build costs for every blueprint, searchable by what
+		it makes.
+	</p>
+	<search>
+		<form method="get" action="/browse">
+			<fieldset role="group">
+				<input
+					type="search"
+					name="q"
+					placeholder='Try "green circuits" or "nuclear"…'
+					aria-label="Search blueprints"
+					autocomplete="off"
+				/>
+				<button type="submit" class="search-submit" aria-label="Search" title="Search">
+					<Search aria-hidden="true" />
+				</button>
+			</fieldset>
+		</form>
+	</search>
+	<p class="advanced">
+		<a href="/browse?advanced=1">Advanced search →</a>
+	</p>
+	<div class="actions">
+		<div class="quick">
+			<ul class="fixed" aria-label="Browse by">
+				<li>
+					<TagChip label="Space Age" icon="[space-age]" href="/browse?mods=space-age" />
+				</li>
+				<li>
+					<TagChip
+						label="Blueprint books"
+						icon="[item=blueprint-book]"
+						href="/browse?kind=book"
+					/>
+				</li>
+			</ul>
+			<TagList tags={tags} label="Popular tags" />
+		</div>
+		<a class="upload" href="/upload" role="button">
+			<Upload aria-hidden="true" /> Upload a blueprint
+		</a>
+	</div>
+</section>
+
+<style>
+	.hero {
+		margin-bottom: 2.5rem;
+		padding: clamp(1.25rem, 4vw, 2.75rem);
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: 1rem;
+		background:
+			radial-gradient(
+				circle at 85% 0%,
+				color-mix(in srgb, var(--pico-primary) 22%, transparent),
+				transparent 55%
+			),
+			linear-gradient(
+				160deg,
+				color-mix(in srgb, var(--pico-primary) 8%, var(--pico-card-background-color)),
+				var(--pico-card-background-color)
+			);
+	}
+	h1 {
+		margin-bottom: 0.25rem;
+		font-size: clamp(2rem, 6vw, 3.25rem);
+		line-height: 1.1;
+	}
+	.tagline {
+		margin-bottom: 0.5rem;
+		color: var(--pico-contrast);
+		font-size: clamp(1.15rem, 3vw, 1.6rem);
+		font-weight: 600;
+		line-height: 1.25;
+	}
+	.lead {
+		max-width: 46ch;
+		margin-bottom: 1.5rem;
+		font-size: 1.1rem;
+		color: var(--pico-muted-color);
+	}
+	search form {
+		margin: 0 0 1rem;
+		max-width: 38rem;
+		--pico-border-radius: 5rem;
+	}
+	search fieldset {
+		margin: 0;
+		box-shadow: 0 0.25rem 1.25rem rgb(0 0 0 / 0.12);
+		border-radius: 5rem;
+	}
+	search input[type="search"] {
+		padding-block: 0.9rem;
+		font-size: 1.05rem;
+	}
+	.search-submit {
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		padding-inline: 1.5rem;
+	}
+	.search-submit :global(svg) {
+		width: 1.3rem;
+		height: 1.3rem;
+	}
+	.advanced {
+		margin: 0 0 1rem;
+		font-size: 0.9rem;
+		color: var(--pico-muted-color);
+	}
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.75rem 1.25rem;
+	}
+	.quick {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+	}
+	.quick :global(ul) {
+		display: contents;
+		margin: 0;
+	}
+	.quick :global(li) {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.upload {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		/* Follows the chips; when they fill the row it starts the next one on
+		   the left, in line with them, instead of hanging alone on the right. */
+		margin: 0;
+	}
+	.upload :global(svg) {
+		width: 1.1rem;
+		height: 1.1rem;
+	}
+</style>

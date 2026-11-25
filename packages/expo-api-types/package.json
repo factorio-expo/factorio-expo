@@ -1,0 +1,31 @@
+{
+	"name": "@factorio-expo/api-types",
+	"version": "0.0.1",
+	"private": true,
+	"description": "TypeScript types of the expo-api's public and staff listeners, generated from their OpenAPI documents (apps/expo-api/openapi/).",
+	"type": "module",
+	"exports": {
+		"./public": {
+			"types": "./src/public.d.ts"
+		},
+		"./admin": {
+			"types": "./src/admin.d.ts"
+		}
+	},
+	"scripts": {
+		"generate": "node src/generate.ts",
+		"lint": "oxlint --fix",
+		"lint:check": "oxlint",
+		"format": "oxfmt --write .",
+		"format:check": "oxfmt --check",
+		"test": "vitest run"
+	},
+	"devDependencies": {
+		"openapi-typescript": "^7.13.0",
+		"typescript": "npm:typescript@^6.0.3",
+		"vitest": "catalog:"
+	},
+	"engines": {
+		"node": ">=26"
+	}
+}

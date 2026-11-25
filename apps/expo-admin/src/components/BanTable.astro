@@ -1,0 +1,126 @@
+---
+// User bans as a table. Active bans get "Change end" and "Revoke" (posting
+// ban-end / ban-revoke, see handleBanPost); ended ones say how they ended.
+import type { StaffBan } from "@lib/api/types";
+import { MAX_BAN_DAYS, reasonLabel } from "@lib/bans";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+
+export interface Props {
+	bans: StaffBan[];
+	/** Hides the user column (a user's own page). */
+	showUser?: boolean;
+	/** Links usernames to this page with ?username= (the Bans filter). */
+	userHref?: (username: string) => string;
+}
+
+const { bans, showUser = true, userHref } = Astro.props;
+const ended = (ban: StaffBan) =>
+	ban.revoked_at
+		? `revoked ${isoDateTime(ban.revoked_at)} by ${ban.revoked_by ?? "staff"}`
+		: `expired ${ban.expires_at ? isoDateTime(ban.expires_at) : ""}`;
+---
+
+<div class="table-wrap">
+	<table class="data">
+		<thead>
+			<tr>
+				{showUser && <th scope="col">User</th>}
+				<th scope="col">Blocks</th>
+				<th scope="col">Reason</th>
+				<th scope="col">By</th>
+				<th scope="col">Ends</th>
+				<th scope="col">
+					<span class="sr-only">Actions</span>
+				</th>
+			</tr>
+		</thead>
+		<tbody>
+			{bans.map((ban) => (
+				<tr>
+					{showUser && (
+						<td>
+							{userHref ? (
+								<a href={userHref(ban.username)}>{ban.username}</a>
+							) : (
+								ban.username
+							)}
+						</td>
+					)}
+					<td>{ban.actions.join(", ")}</td>
+					<td>
+						{reasonLabel(ban.reason_code)}
+						{ban.note && <small class="muted block">{ban.note}</small>}
+					</td>
+					<td>
+						{ban.banned_by}
+						<small class="muted block">{isoDateTime(ban.created_at)}</small>
+					</td>
+					<td>
+						{ban.active ? (
+							ban.expires_at ? (
+								isoDateTime(ban.expires_at)
+							) : (
+								<span class="pill" data-tone="danger">
+									permanent
+								</span>
+							)
+						) : (
+							<small class="muted">{ended(ban)}</small>
+						)}
+					</td>
+					<td class="actions-cell">
+						{ban.active && (
+							<div class="ban-actions">
+								<details class="more">
+									<summary>Change end</summary>
+									<form method="post" class="actions">
+										<input type="hidden" name="action" value="ban-end" />
+										<input type="hidden" name="ban_id" value={ban.id} />
+										<input
+											type="number"
+											name="days"
+											min="1"
+											max={MAX_BAN_DAYS}
+											placeholder="days"
+											aria-label="Days from now"
+										/>
+										<label>
+											<input type="checkbox" name="permanent" value="yes" />
+											permanent
+										</label>
+										<button type="submit" class="secondary small">
+											Set
+										</button>
+									</form>
+								</details>
+								<form method="post" class="inline">
+									<input type="hidden" name="action" value="ban-revoke" />
+									<input type="hidden" name="ban_id" value={ban.id} />
+									<button
+										type="submit"
+										class="secondary outline small"
+										data-confirm={`Revoke this ban of ${ban.username}?`}
+									>
+										Revoke
+									</button>
+								</form>
+							</div>
+						)}
+					</td>
+				</tr>
+			))}
+		</tbody>
+	</table>
+</div>
+
+<style>
+	.ban-actions {
+		display: inline-flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		text-align: left;
+	}
+	.ban-actions details[open] {
+		min-width: 14rem;
+	}
+</style>

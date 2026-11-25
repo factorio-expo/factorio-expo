@@ -1,0 +1,25 @@
+# Adds Factorio to the e2e stack for the recovery suite (`pnpm test:recovery`,
+# recovery/): layered after compose.yaml when E2E_FACTORIO=1 (support/stack.ts).
+#
+# - Nothing is downloaded: server and client mount an existing engine volume,
+#   by default the dev stack's (start the dev stack once), or the one named by
+#   E2E_FACTORIO_ENGINE_VOLUME. The downloader only checks its version.
+# - The client's sprite-atlas cache (gigabytes, minutes to build) lives in its
+#   own volume that `stack:down` keeps, so only the first run builds it.
+# - The server's save is recreated with every fresh stack.
+
+services:
+  factorio-downloader:
+    profiles: !reset []
+  factorio-server:
+    profiles: !reset []
+  factorio-client:
+    profiles: !reset []
+
+volumes:
+  factorio-engine:
+    external: true
+    name: ${E2E_FACTORIO_ENGINE_VOLUME:-factorio-expo_factorio-engine}
+  factorio-client-userdata:
+    external: true
+    name: factorio-expo-e2e-client-cache

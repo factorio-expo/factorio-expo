@@ -1,0 +1,289 @@
+---
+// The public profile's frame, shared by its tabs (/u/{name}, /collections,
+// /comments): name, status line, social links, numbers and top tags, then the
+// tab links and the tab's content. Each tab is its own server-rendered page
+// with its own paging. The owner edits status and links in place: the pencil
+// beside the name (as on an entry page) swaps the name block for
+// ProfileEditForm (profile-edit.ts).
+import Pencil from "@lucide/astro/icons/pencil";
+import Rss from "@lucide/astro/icons/rss";
+import Page from "@layouts/Page.astro";
+import TagChip from "@components/common/TagChip.astro";
+import type { PublicUser } from "@lib/api";
+import { ATOM_TYPE, feedPath } from "@lib/atom-feed";
+import { tagHref } from "@lib/tags";
+import { socialBrandStyle, socialPlatform } from "@lib/social-links";
+import { isoDate } from "@factorio-expo/ui/utils/dates.ts";
+import { formatRichTextSummary } from "@factorio-expo/ui/game/rich-text.ts";
+import ProfileEditForm from "./ProfileEditForm.astro";
+import ProfileProgress from "./ProfileProgress.astro";
+
+export type ProfileTab = "entries" | "collections" | "comments";
+
+interface Props {
+	user: PublicUser;
+	/** The viewer is the profile's owner. */
+	owner: boolean;
+	tab: ProfileTab;
+	title: string;
+	description: string;
+}
+const { user, owner, tab, title, description } = Astro.props;
+const base = `/u/${encodeURIComponent(user.username)}`;
+// Feed readers find the user's Atom feed from the profile's head.
+const feedUrl = new URL(feedPath(user.username), Astro.site ?? Astro.url).toString();
+const stats = user.stats;
+const number = (value: number) => value.toLocaleString("en-US");
+const plural = (value: number, one: string, many: string) =>
+	`${number(value)} ${value === 1 ? one : many}`;
+const tabs: { key: ProfileTab; href: string; label: string; count: number }[] = [
+	{ key: "entries", href: base, label: "Entries", count: stats.entries },
+	{
+		key: "collections",
+		href: `${base}/collections`,
+		label: "Collections",
+		count: stats.collections,
+	},
+	{ key: "comments", href: `${base}/comments`, label: "Comments", count: stats.comments },
+];
+const links = user.links.flatMap((link) => {
+	const info = socialPlatform(link.platform);
+	return info ? [{ ...link, info }] : [];
+});
+---
+
+<Page title={title} description={description} nav={owner ? "profile" : "none"}>
+	<link
+		slot="head"
+		rel="alternate"
+		type={ATOM_TYPE}
+		title={`${user.username} on Factorio Expo`}
+		href={feedUrl}
+	/>
+	<section class="profile-head" data-profile>
+		<div data-profile-display>
+			<h1 class="profile-title">
+				<span>{user.username}</span>
+				<a
+					class="icon-button"
+					href={feedPath(user.username)}
+					data-profile-feed
+					aria-label={`Atom feed of ${user.username}`}
+					data-tooltip="Atom feed: new entries and revisions"
+				>
+					<Rss aria-hidden="true" />
+				</a>
+				{owner && (
+					<button
+						type="button"
+						class="icon-button"
+						data-profile-edit-open
+						aria-label="Edit profile"
+						data-tooltip="Edit status and social links"
+					>
+						<Pencil aria-hidden="true" />
+					</button>
+				)}
+			</h1>
+			{user.status && (
+				<p
+					class="status"
+					data-profile-status
+					set:html={formatRichTextSummary(user.status)}
+				/>
+			)}
+			{links.length > 0 && (
+				<ul class="links" aria-label="Elsewhere">
+					{links.map((link) => (
+						<li>
+							<a
+								href={link.url}
+								target="_blank"
+								rel="nofollow ugc noopener noreferrer me"
+								title={`${link.info.label}: ${link.handle}`}
+							>
+								<span
+									class="brand"
+									aria-hidden="true"
+									style={socialBrandStyle(link.info)}
+								/>
+								<span class="visually-hidden">{link.info.label}:</span>
+								{link.handle}
+							</a>
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
+		{owner && <ProfileEditForm user={user} />}
+		<p class="facts">
+			<span>
+				Member since{" "}
+				<time datetime={user.created_at} data-local="date">
+					{isoDate(user.created_at)}
+				</time>
+			</span>
+			<span>{plural(stats.entries, "public entry", "public entries")}</span>
+			<span>{plural(stats.views, "view", "views")}</span>
+			<span>{plural(stats.favorites, "favorite", "favorites")} received</span>
+		</p>
+		<ProfileProgress progress={user.progress} />
+		{stats.top_tags.length > 0 && (
+			<div class="top-tags-row">
+				<span class="top-tags-label" id="top-tags-label">
+					Most used tags
+				</span>
+				<ul class="top-tags" aria-labelledby="top-tags-label">
+					{stats.top_tags.map((tag) => (
+						<li>
+							<TagChip
+								label={tag.name}
+								icon={tag.icon}
+								href={tagHref(tag.slug)}
+								title={`${tag.name}: ${plural(tag.entries, "entry", "entries")}`}
+							/>
+						</li>
+					))}
+				</ul>
+			</div>
+		)}
+	</section>
+
+	<nav class="tabs" aria-label="Profile">
+		<ul>
+			{tabs.map((item) => (
+				<li>
+					<a href={item.href} aria-current={item.key === tab ? "page" : undefined}>
+						{item.label} <small>{number(item.count)}</small>
+					</a>
+				</li>
+			))}
+		</ul>
+	</nav>
+
+	<slot />
+</Page>
+
+<style>
+	:global([data-profile] [hidden]) {
+		display: none !important;
+	}
+	/* The same title row as an entry page (EntryMetadata): name, pencil right. */
+	.profile-title {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+		overflow-wrap: anywhere;
+	}
+	.profile-title > span {
+		min-width: 0;
+		flex: 1;
+	}
+	[data-profile-edit-open] {
+		/* Taller than a text line: negative margins keep it from growing the row. */
+		margin: -0.5rem 0;
+	}
+	.status {
+		margin-bottom: 0.75rem;
+		font-size: 1.1em;
+		overflow-wrap: anywhere;
+	}
+	.links,
+	.top-tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 1rem;
+		margin: 0 0 0.75rem;
+		padding: 0;
+		list-style: none;
+	}
+	.links li,
+	.top-tags li {
+		margin: 0;
+		list-style: none;
+	}
+	.top-tags-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem 0.75rem;
+		margin-bottom: 0.75rem;
+	}
+	.top-tags-label {
+		color: var(--pico-muted-color);
+		font-size: 0.875rem;
+	}
+	.top-tags {
+		gap: 0.4rem;
+		margin: 0;
+	}
+	.links a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.brand {
+		flex: none;
+		width: 1.1rem;
+		height: 1.1rem;
+		background-color: var(--brand, currentColor);
+		mask: var(--logo) center / contain no-repeat;
+	}
+	/* The black brands turn white on the dark theme. */
+	:global(:root[data-theme="dark"]) .brand {
+		background-color: var(--brand-dark, var(--brand, currentColor));
+	}
+	.facts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 1.25rem;
+		margin-bottom: 0.75rem;
+		color: var(--pico-muted-color);
+	}
+	/* Three short tabs: they wrap on a narrow screen instead of scrolling. */
+	.tabs {
+		margin: 1.5rem 0;
+		border-bottom: 1px solid var(--pico-muted-border-color);
+	}
+	.tabs ul {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: 0.25rem;
+		margin: 0;
+		padding: 0;
+	}
+	.tabs li {
+		display: flex;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	/* The 2px underline overlaps the 1px rule below the nav (negative bottom
+	   margin; Pico's own nav-link margins are reset). */
+	.tabs a {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.35rem;
+		margin: 0 0 -1px;
+		padding: 0.5rem 0.9rem;
+		border-bottom: 2px solid transparent;
+		color: var(--pico-muted-color);
+		text-decoration: none;
+		white-space: nowrap;
+	}
+	.tabs a:hover {
+		color: var(--pico-color);
+	}
+	.tabs a[aria-current="page"] {
+		border-bottom-color: var(--pico-primary);
+		color: var(--pico-color);
+		font-weight: 600;
+	}
+	.tabs small {
+		color: var(--pico-muted-color);
+		font-weight: normal;
+	}
+</style>

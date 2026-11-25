@@ -1,0 +1,51 @@
+---
+// Every published challenge: open and upcoming first, then judging, then past.
+import ChallengeCard from "@components/challenge/ChallengeCard.astro";
+import Page from "@layouts/Page.astro";
+import type { Challenge } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server";
+
+const { challenges } = await getServerApiClient(Astro).challenges.list();
+const sections: { title: string; items: Challenge[] }[] = [
+	{ title: "Open", items: challenges.filter((c) => c.status === "open") },
+	{ title: "Upcoming", items: challenges.filter((c) => c.status === "upcoming") },
+	{ title: "Voting", items: challenges.filter((c) => c.status === "judging") },
+	{ title: "Past", items: challenges.filter((c) => c.status === "closed") },
+];
+---
+
+<Page
+	title="Challenges"
+	nav="challenges"
+	description="Factorio design challenges: build the best blueprint for the goal, ranked by its analysis and voted on by the community."
+>
+	<h1>Challenges</h1>
+	<p>
+		Build the best blueprint for the goal. Entries are ranked by their analysis, and the
+		community votes for its favorites.
+	</p>
+	{challenges.length === 0 && <p>No challenges yet. Check back soon.</p>}
+	{sections
+		.filter((section) => section.items.length > 0)
+		.map((section) => (
+			<section>
+				<h2>{section.title}</h2>
+				<div class="challenge-list">
+					{section.items.map((challenge) => (
+						<ChallengeCard challenge={challenge} />
+					))}
+				</div>
+			</section>
+		))}
+</Page>
+
+<style>
+	.challenge-list {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+		gap: 1rem;
+	}
+	section {
+		margin-bottom: 2rem;
+	}
+</style>

@@ -1,0 +1,190 @@
+---
+// A podium of an ended challenge: its top three (by score or by community
+// vote) on steps, first in the middle and tallest. Below 40rem the places
+// stack in order.
+import EntryCard from "@components/entry/EntryCard.astro";
+import type { ChallengeEntry } from "@lib/api";
+import { toCard } from "@utils/entry-card.ts";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+
+export interface Place {
+	item: ChallengeEntry;
+	/** 1, 2 or 3. */
+	place: number;
+	/** The place's number under the card (a score, a vote count); may hold icon tokens. */
+	detail: string;
+}
+
+interface Props {
+	/** The heading's id and the podium's accent: score or vote. */
+	kind: "score" | "vote";
+	heading: string;
+	/** One line under the heading. */
+	lead: string;
+	places: Place[];
+}
+const { kind, heading, lead, places } = Astro.props;
+const headingId = `podium-${kind}-heading`;
+const ordinal = ["1st", "2nd", "3rd"];
+// An empty step stands in for a place nobody took, so it still reads as a podium.
+const empty = [1, 2, 3].filter((place) => !places.some((each) => each.place === place));
+---
+
+<section class:list={["podium", kind]} aria-labelledby={headingId} data-podium={kind}>
+	<header>
+		<h3 id={headingId}>
+			<slot name="icon" />
+			{heading}
+		</h3>
+		<p>{lead}</p>
+	</header>
+	<ol>
+		{places.map(({ item, place, detail }) => (
+			<li class={`place place-${place}`} aria-label={`${ordinal[place - 1]} place`}>
+				<EntryCard card={toCard(item.entry)} eager />
+				<div class="step">
+					<span class="medal" aria-hidden="true">
+						{place}
+					</span>
+					<strong class="detail" set:html={formatRichText(detail)} />
+					<span class="by">by {item.username}</span>
+				</div>
+			</li>
+		))}
+		{empty.map((place) => (
+			<li class={`place place-${place} vacant`} aria-hidden="true">
+				<div class="step">
+					<span class="medal">{place}</span>
+				</div>
+			</li>
+		))}
+	</ol>
+</section>
+
+<style>
+	.podium {
+		--accent: var(--pico-primary);
+		margin-bottom: 2rem;
+		padding: 1.25rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-top: 4px solid var(--accent);
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-card-sectioning-background-color);
+	}
+	.podium.vote {
+		--accent: #7c5cd6;
+	}
+	header {
+		margin-bottom: 1rem;
+		text-align: center;
+	}
+	h3 {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		margin-bottom: 0.25rem;
+		color: var(--accent);
+	}
+	header p {
+		margin: 0;
+		color: var(--pico-muted-color);
+	}
+	ol {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		align-items: end;
+		gap: 1rem;
+		max-width: 52rem;
+		margin: 0 auto;
+		padding: 0;
+		list-style: none;
+	}
+	.place {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		margin: 0;
+	}
+	/* Second on the left, first in the middle, third on the right. */
+	.place-1 {
+		grid-column: 2;
+		grid-row: 1;
+	}
+	.place-2 {
+		grid-column: 1;
+		grid-row: 1;
+	}
+	.place-3 {
+		grid-column: 3;
+		grid-row: 1;
+	}
+	.step {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: flex-start;
+		gap: 0.15rem;
+		margin-top: 0.5rem;
+		padding: 0.75rem 0.5rem;
+		border-radius: var(--pico-border-radius) var(--pico-border-radius) 0 0;
+		background: color-mix(in srgb, var(--medal) 22%, var(--pico-background-color));
+		border-top: 3px solid var(--medal);
+		text-align: center;
+	}
+	.place-1 {
+		--medal: #d4a017;
+	}
+	.place-2 {
+		--medal: #9ea3a8;
+	}
+	.place-3 {
+		--medal: #c0773a;
+	}
+	.place-1 .step {
+		min-height: 8.5rem;
+	}
+	.place-2 .step {
+		min-height: 6rem;
+	}
+	.place-3 .step {
+		min-height: 4.5rem;
+	}
+	.vacant .step {
+		opacity: 0.45;
+	}
+	.medal {
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 50%;
+		background: var(--medal);
+		color: #fff;
+		font-weight: 700;
+	}
+	.detail {
+		font-size: 1.05rem;
+	}
+	.by {
+		color: var(--pico-muted-color);
+		font-size: 0.875rem;
+	}
+	@media (max-width: 40rem) {
+		ol {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.place-1,
+		.place-2,
+		.place-3 {
+			grid-column: 1;
+			grid-row: auto;
+		}
+		.place .step {
+			min-height: 0;
+		}
+		.vacant {
+			display: none;
+		}
+	}
+</style>

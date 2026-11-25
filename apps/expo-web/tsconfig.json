@@ -1,0 +1,17 @@
+{
+	"extends": "astro/tsconfigs/strict",
+	"include": [".astro/types.d.ts", "**/*", "src/pages/.well-known/*"],
+	"exclude": ["dist"],
+	"compilerOptions": {
+		"paths": {
+			"@components/*": ["./src/components/*"],
+			"@layouts/*": ["./src/layouts/*"],
+			"@pages/*": ["./src/pages/*"],
+			"@lib/*": ["./src/lib/*"],
+			"@styles/*": ["./src/styles/*"],
+			"@assets/*": ["./src/assets/*"],
+			"@utils/*": ["./src/lib/utils/*"],
+			"@data/*": ["./src/data/*"]
+		}
+	}
+}

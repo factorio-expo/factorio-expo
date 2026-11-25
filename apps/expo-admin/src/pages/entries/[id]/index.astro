@@ -1,0 +1,527 @@
+---
+// One entry whatever its state: facts, the current revision's blueprints
+// with their job states, revisions (raw strings), reports and comments.
+// Delete (soft) or restore, re-run previews or analyses, reindex, purge
+// the CDN cache.
+import { entryReportReasonText } from "@lib/bans";
+import RichText from "@factorio-expo/ui/game/RichText.astro";
+import EntryStatePills from "@components/EntryStatePills.astro";
+import Outcome from "@components/Outcome.astro";
+import Console from "@layouts/Console.astro";
+import { FormError, handlePost } from "@lib/api/actions";
+import { loadFromApi } from "@lib/api/page";
+import type { StaffLeaf } from "@lib/api/types";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { formatBytes } from "@lib/format";
+import { formText } from "@lib/forms";
+import { siteEntryUrl } from "@lib/site";
+
+const entryId = Astro.params.id ?? "";
+
+const posted = await handlePost(Astro, async (api, form) => {
+	const reason = formText(form, "reason");
+	const action = formText(form, "action");
+	switch (action) {
+		case "delete":
+			if (!reason) throw new FormError("Give a reason to delete the entry.");
+			await api.deleteEntry(entryId, reason);
+			return "Entry deleted (restorable until the hard-delete cleanup runs).";
+		case "restore":
+			await api.restoreEntry(entryId, reason);
+			return "Entry restored; it is queued for search.";
+		case "reindex":
+			await api.reindexEntry(entryId, reason);
+			return "Search sync queued.";
+		case "purge":
+			await api.purgeEntryCache(entryId, reason);
+			return "CDN purge started for every revision's previews and raw strings.";
+		case "rerun-preview":
+		case "rerun-analysis": {
+			const phase = action === "rerun-preview" ? "preview" : "analysis";
+			const blueprintId = formText(form, "blueprint_id") || undefined;
+			await api.rerunEntry(entryId, { phase, blueprint_id: blueprintId, reason });
+			return blueprintId
+				? `The blueprint's ${phase} is queued.`
+				: `Every ${phase} is queued.`;
+		}
+		default:
+			throw new FormError("Unknown action.");
+	}
+});
+if (posted) return posted;
+
+const loaded = await loadFromApi(Astro, (api) => api.entry(entryId));
+const entry = loaded.data;
+const link = entry && !entry.gone ? siteEntryUrl(entry.id) : undefined;
+const number = new Intl.NumberFormat("en");
+
+type Phase = { label: string; tone?: "danger" | "warn"; code?: string; detail?: string };
+const phaseOf = (has: boolean, state: string, code: string, detail: string): Phase => {
+	if (state === "pending") return { label: has ? "re-running" : "pending", tone: "warn" };
+	if (state === "failed") return { label: "failed", tone: "danger", code, detail };
+	return { label: has ? "done" : "none" };
+};
+const previewOf = (leaf: StaffLeaf) =>
+	phaseOf(
+		leaf.has_preview,
+		leaf.preview_job_state,
+		leaf.preview_failure_code,
+		leaf.preview_failure_detail,
+	);
+const analysisOf = (leaf: StaffLeaf) =>
+	phaseOf(
+		leaf.has_analysis,
+		leaf.analysis_job_state,
+		leaf.analysis_failure_code,
+		leaf.analysis_failure_detail,
+	);
+const live = entry ? !entry.gone : false;
+---
+
+<Console
+	title={entry ? entry.title || "(untitled)" : "Entry"}
+	nav="entries"
+	description={entry ? `Entry ${entry.id}` : undefined}
+>
+	<Outcome loadError={loaded.error} />
+	<p>
+		<a href="/entries">All entries</a>
+	</p>
+
+	{entry && (
+		<>
+			<section class="panel" aria-labelledby="facts">
+				<div class="panel-head">
+					<h2 id="facts">Entry</h2>
+					<EntryStatePills entry={entry} />
+				</div>
+				<dl class="facts">
+					<dt>Id</dt>
+					<dd>
+						<code>{entry.id}</code>
+						{link && (
+							<>
+								{" "}
+								<a href={link} target="_blank" rel="noopener noreferrer">
+									Open on the site
+								</a>
+							</>
+						)}
+					</dd>
+					<dt>Owner</dt>
+					<dd>
+						{entry.owner_id ? (
+							<a href={`/users/${encodeURIComponent(entry.owner_id)}`}>
+								{entry.owner}
+							</a>
+						) : (
+							<span class="muted">anonymous (edit link only)</span>
+						)}
+					</dd>
+					<dt>Visibility</dt>
+					<dd>
+						{entry.visibility}
+						{entry.listed ? " (listed)" : " (not listed)"}
+					</dd>
+					<dt>Created</dt>
+					<dd>{isoDateTime(entry.created_at)}</dd>
+					<dt>Updated</dt>
+					<dd>{isoDateTime(entry.updated_at)}</dd>
+					{entry.deleted_at && (
+						<>
+							<dt>{entry.expired ? "Expired" : "Deleted"}</dt>
+							<dd>{isoDateTime(entry.deleted_at)}</dd>
+						</>
+					)}
+					{entry.expires_at && (
+						<>
+							<dt>Expires</dt>
+							<dd>{isoDateTime(entry.expires_at)}</dd>
+						</>
+					)}
+					<dt>Views, favorites</dt>
+					<dd>
+						{number.format(entry.views)}, {number.format(entry.favorites)}
+					</dd>
+					<dt>Tags</dt>
+					<dd>
+						{entry.tags.length > 0 ? (
+							entry.tags.join(", ")
+						) : (
+							<span class="muted">none</span>
+						)}
+					</dd>
+					<dt>Search</dt>
+					<dd>
+						{entry.search.action ? (
+							<>
+								{entry.search.action} {entry.search.state}
+								{entry.search.failure_code && (
+									<code> {entry.search.failure_code}</code>
+								)}
+							</>
+						) : (
+							<span class="muted">up to date</span>
+						)}
+					</dd>
+				</dl>
+				{entry.description && (
+					<details>
+						<summary>Description</summary>
+						<p class="prewrap">{entry.description}</p>
+					</details>
+				)}
+
+				<form method="post" class="panel-foot actions">
+					<input
+						type="text"
+						name="reason"
+						placeholder={live ? "Note (required to delete)" : "Note (optional)"}
+						aria-label="Note"
+						maxlength="500"
+					/>
+					{live && (
+						<button
+							type="submit"
+							name="action"
+							value="delete"
+							class="danger"
+							data-confirm="Delete this entry? It disappears from the site and search (restorable)."
+						>
+							Delete
+						</button>
+					)}
+					{entry.deleted_at && !entry.restore_blocker && (
+						<button type="submit" name="action" value="restore">
+							Restore
+						</button>
+					)}
+					{live && entry.blueprints.length > 0 && (
+						<>
+							<button
+								type="submit"
+								name="action"
+								value="rerun-preview"
+								class="secondary"
+							>
+								Re-run all previews
+							</button>
+							<button
+								type="submit"
+								name="action"
+								value="rerun-analysis"
+								class="secondary"
+							>
+								Re-run all analyses
+							</button>
+						</>
+					)}
+					<button type="submit" name="action" value="reindex" class="secondary">
+						Reindex
+					</button>
+					<button
+						type="submit"
+						name="action"
+						value="purge"
+						class="secondary"
+						data-confirm="Purge this entry's previews and raw strings from the CDN cache?"
+					>
+						Purge cache
+					</button>
+				</form>
+				{entry.restore_blocker && (
+					<p class="muted">Cannot be restored: {entry.restore_blocker}.</p>
+				)}
+			</section>
+
+			<section class="panel" aria-labelledby="blueprints">
+				<div class="panel-head">
+					<h2 id="blueprints">
+						Blueprints{" "}
+						<span class="count">{number.format(entry.blueprints.length)}</span>
+					</h2>
+					<span class="muted">revision {entry.current_revision}</span>
+				</div>
+				{entry.blueprints.length === 0 ? (
+					<p class="empty">No blueprints (planners or empty books only).</p>
+				) : (
+					<div class="table-wrap">
+						<table class="data">
+							<thead>
+								<tr>
+									<th scope="col">Blueprint</th>
+									<th scope="col">Preview</th>
+									<th scope="col">Analysis</th>
+									{live && <th scope="col" aria-label="Actions" />}
+								</tr>
+							</thead>
+							<tbody>
+								{entry.blueprints.map((leaf) => (
+									<tr>
+										<td>
+											{leaf.label ? (
+												<RichText text={leaf.label} />
+											) : (
+												<span class="muted">(unnamed)</span>
+											)}
+											<div class="muted small">
+												<code>{leaf.id}</code>,{" "}
+												{number.format(leaf.entity_count)} entities
+											</div>
+										</td>
+										{[previewOf(leaf), analysisOf(leaf)].map((phase) => (
+											<td class="phase">
+												<span class="pill" data-tone={phase.tone}>
+													{phase.label}
+												</span>
+												{phase.code && <code>{phase.code}</code>}
+												{phase.detail && (
+													<details class="more">
+														<summary>Details</summary>
+														<pre>{phase.detail}</pre>
+													</details>
+												)}
+											</td>
+										))}
+										{live && (
+											<td>
+												<form method="post" class="row-actions">
+													<input
+														type="hidden"
+														name="blueprint_id"
+														value={leaf.id}
+													/>
+													<button
+														type="submit"
+														name="action"
+														value="rerun-preview"
+														class="secondary"
+													>
+														Re-render
+													</button>
+													<button
+														type="submit"
+														name="action"
+														value="rerun-analysis"
+														class="secondary"
+													>
+														Re-analyse
+													</button>
+												</form>
+											</td>
+										)}
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				)}
+			</section>
+
+			<section class="panel" aria-labelledby="revisions">
+				<div class="panel-head">
+					<h2 id="revisions">Revisions</h2>
+				</div>
+				<div class="table-wrap">
+					<table class="data">
+						<thead>
+							<tr>
+								<th scope="col">Revision</th>
+								<th scope="col">Game version</th>
+								<th scope="col">Created</th>
+								<th scope="col" class="num">
+									Blueprints
+								</th>
+								<th scope="col">Exchange string</th>
+							</tr>
+						</thead>
+						<tbody>
+							{entry.revisions.map((revision) => (
+								<tr>
+									<td>
+										{revision.number}
+										{revision.current && <span class="pill">current</span>}
+									</td>
+									<td>
+										{revision.game_version || (
+											<span class="muted">unknown</span>
+										)}
+									</td>
+									<td class="nowrap">{isoDateTime(revision.created_at)}</td>
+									<td class="num">{number.format(revision.leaves)}</td>
+									<td>
+										<a
+											href={`/entries/${encodeURIComponent(entry.id)}/raw/${encodeURIComponent(revision.id)}`}
+											target="_blank"
+											rel="noopener"
+										>
+											Raw ({formatBytes(revision.string_bytes)})
+										</a>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section class="panel" aria-labelledby="reports">
+				<div class="panel-head">
+					<h2 id="reports">
+						Reports <span class="count">{number.format(entry.reports.length)}</span>
+					</h2>
+					{entry.open_reports > 0 && <a href="/reports/entries">Report queue</a>}
+				</div>
+				{entry.reports.length === 0 ? (
+					<p class="empty">No reports.</p>
+				) : (
+					<ul class="list">
+						{entry.reports.map((report) => (
+							<li>
+								<p>
+									<span
+										class="pill"
+										data-tone={report.resolved_at ? undefined : "warn"}
+									>
+										{report.resolved_at ? "resolved" : "open"}
+									</span>{" "}
+									<strong>
+										{entryReportReasonText[report.reason] ?? report.reason}
+									</strong>
+									·
+									{`revision ${report.revision_number}, by ${
+										report.reporter.anonymous
+											? "an anonymous visitor"
+											: report.reporter.username
+									}, ${isoDateTime(report.created_at)}`}
+									{report.resolved_at && (
+										<span class="muted">
+											{" "}
+											(resolved by {report.resolved_by},{" "}
+											{isoDateTime(report.resolved_at)})
+										</span>
+									)}
+								</p>
+								{report.note && <p class="prewrap note">{report.note}</p>}
+							</li>
+						))}
+					</ul>
+				)}
+			</section>
+
+			<section class="panel" aria-labelledby="comments">
+				<div class="panel-head">
+					<h2 id="comments">
+						Latest comments{" "}
+						<span class="count">{number.format(entry.comments.length)}</span>
+					</h2>
+				</div>
+				{entry.comments.length === 0 ? (
+					<p class="empty">No comments.</p>
+				) : (
+					<ul class="list">
+						{entry.comments.map((comment) => {
+							const commentLink = live
+								? siteEntryUrl(entry.id, comment.number)
+								: undefined;
+							return (
+								<li>
+									<p>
+										{commentLink ? (
+											<a
+												href={commentLink}
+												target="_blank"
+												rel="noopener noreferrer"
+											>
+												#{comment.number}
+											</a>
+										) : (
+											`#${comment.number}`
+										)}{" "}
+										by <strong>{comment.author}</strong>,{" "}
+										{isoDateTime(comment.created_at)}
+										{comment.edited_at && <span class="muted"> (edited)</span>}
+										{comment.open_reports > 0 && (
+											<span class="pill" data-tone="warn">
+												{comment.open_reports} open reports
+											</span>
+										)}
+									</p>
+									{comment.removed_by ? (
+										<p class="muted">Removed ({comment.removed_by}).</p>
+									) : (
+										<p class="prewrap note">{comment.body}</p>
+									)}
+								</li>
+							);
+						})}
+					</ul>
+				)}
+			</section>
+		</>
+	)}
+</Console>
+
+<style>
+	.facts {
+		display: grid;
+		grid-template-columns: max-content 1fr;
+		gap: 0.25rem 1rem;
+		margin: 0 0 0.75rem;
+	}
+	.facts dt {
+		color: var(--pico-muted-color);
+	}
+	.facts dd {
+		margin: 0;
+	}
+	.prewrap {
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	.small {
+		font-size: 0.85rem;
+	}
+	.nowrap {
+		white-space: nowrap;
+	}
+	.phase code {
+		margin-left: 0.35rem;
+	}
+	.phase pre {
+		margin: 0.3rem 0 0;
+		max-height: 16rem;
+		overflow: auto;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		font-size: 0.8rem;
+	}
+	.row-actions {
+		display: flex;
+		gap: 0.3rem;
+		margin: 0;
+	}
+	.row-actions button {
+		margin: 0;
+		padding: 0.25rem 0.7rem;
+		white-space: nowrap;
+	}
+	.list {
+		margin: 0;
+		padding: 0;
+	}
+	.list li {
+		list-style: none;
+		padding-block: 0.6rem;
+		border-top: var(--console-border);
+	}
+	.list li p {
+		margin: 0;
+	}
+	.note {
+		margin-top: 0.3rem !important;
+	}
+	.panel-foot {
+		margin-bottom: 0;
+	}
+</style>

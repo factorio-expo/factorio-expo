@@ -1,0 +1,117 @@
+---
+// The Overview's resource numbers from Dozzle (src/lib/dozzle.ts). Rendered
+// in the page and again by /partials/resources, which the Overview polls.
+import type { ResourceUsage } from "@lib/dozzle";
+import { formatBytes } from "@lib/format";
+
+export interface Props {
+	/** Undefined when Dozzle did not answer. */
+	resources: ResourceUsage | undefined;
+}
+
+const { resources } = Astro.props;
+const percent = new Intl.NumberFormat("en", { maximumFractionDigits: 1 });
+/** Container names without the compose project prefix. */
+const shortName = (name: string) => name.replace(/^factorio-expo-/, "");
+---
+
+{resources ? (
+	<>
+		<div class="meters">
+			<div>
+				<p class="meter-label">
+					<span>CPU</span>
+					<span>
+						{percent.format(resources.cpuPercent)}%
+						{resources.cores && <span class="muted"> of {resources.cores} cores</span>}
+					</span>
+				</p>
+				<progress value={Math.min(resources.cpuPercent, 100)} max="100" />
+			</div>
+			<div>
+				<p class="meter-label">
+					<span>Memory</span>
+					<span>
+						{formatBytes(resources.memoryUsed)}
+						{resources.memoryTotal && (
+							<span class="muted"> of {formatBytes(resources.memoryTotal)}</span>
+						)}
+					</span>
+				</p>
+				{resources.memoryTotal && (
+					<progress value={resources.memoryUsed} max={resources.memoryTotal} />
+				)}
+			</div>
+			<div>
+				<p class="meter-label">
+					<span>Containers</span>
+					<span>
+						{resources.containers.length} running
+						{resources.stopped > 0 && (
+							<span class="muted"> · {resources.stopped} stopped</span>
+						)}
+					</span>
+				</p>
+			</div>
+		</div>
+		<div class="table-wrap">
+			<table class="data">
+				<thead>
+					<tr>
+						<th scope="col">Container</th>
+						<th scope="col" class="num">
+							CPU
+						</th>
+						<th scope="col" class="num">
+							Memory
+						</th>
+						<th scope="col" class="bar-col">
+							<span class="sr-only">Share of memory</span>
+						</th>
+					</tr>
+				</thead>
+				<tbody>
+					{resources.containers.map((container) => (
+						<tr>
+							<td>{shortName(container.name)}</td>
+							<td class="num">{percent.format(container.cpu)}%</td>
+							<td class="num">{formatBytes(container.memory)}</td>
+							<td class="bar-col">
+								<progress value={container.memoryPercent} max="100" />
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+		<p class="muted note">
+			CPU is per container as <code>docker stats</code> shows it (100% is one core).
+		</p>
+	</>
+) : (
+	<p class="empty">Resource usage is unavailable: Dozzle did not answer.</p>
+)}
+
+<style>
+	.meters {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+		gap: 0.75rem 1.5rem;
+		margin-bottom: 1rem;
+	}
+	.meter-label {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin: 0 0 0.3rem;
+		font-size: 0.9rem;
+	}
+	.bar-col {
+		width: 30%;
+		min-width: 6rem;
+	}
+	.note {
+		margin: 0.75rem 0 0;
+		font-size: 0.8rem;
+	}
+</style>

@@ -1,0 +1,66 @@
+---
+// Copy and clear buttons of one StringTool field (`field` is its id; `name`
+// goes into the labels, "Copy JSON"). Rendered disabled; string-tool.ts binds
+// and enables them. Copy feedback: lib/copy-button.ts.
+import Clipboard from "@lucide/astro/icons/clipboard";
+import ClipboardCheck from "@lucide/astro/icons/clipboard-check";
+import ClipboardX from "@lucide/astro/icons/clipboard-x";
+import HandGrab from "@lucide/astro/icons/hand-grab";
+import Eraser from "@lucide/astro/icons/eraser";
+
+interface Props {
+	field: string;
+	name: string;
+	/** Offer a handle that drags the field's text into the game (exchange strings). */
+	drag?: boolean;
+}
+
+const { field, name, drag = false } = Astro.props;
+---
+
+<span class="field-tools" data-field-tools={field}>
+	{drag && (
+		<span
+			role="button"
+			class="icon-button"
+			data-drag-string
+			data-tooltip={`Drag ${name} into the game`}
+			data-placement="left"
+			aria-label={`Drag ${name} into the game`}
+		>
+			<HandGrab aria-hidden="true" />
+		</span>
+	)}
+	<button
+		type="button"
+		class="icon-button"
+		data-field-copy
+		data-tooltip={`Copy ${name}`}
+		data-placement="left"
+		aria-label={`Copy ${name}`}
+		disabled
+	>
+		<Clipboard data-copy-icon="idle" />
+		<ClipboardCheck data-copy-icon="success" aria-hidden="true" />
+		<ClipboardX data-copy-icon="failed" aria-hidden="true" />
+	</button>
+	<button
+		type="button"
+		class="icon-button"
+		data-field-clear
+		data-tooltip={`Clear ${name}`}
+		data-placement="left"
+		aria-label={`Clear ${name}`}
+		disabled
+	>
+		<Eraser aria-hidden="true" />
+	</button>
+	<span class="visually-hidden" data-field-copy-status aria-live="polite"></span>
+</span>
+
+<style>
+	.field-tools {
+		display: inline-flex;
+		margin-left: auto;
+	}
+</style>

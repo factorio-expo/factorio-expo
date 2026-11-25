@@ -1,0 +1,141 @@
+---
+// Body of the entry page: a single blueprint's detail inline, a planner's
+// settings, a book's tree, or the empty state. The "info" slot (EntryInfo) sits beside the preview, or
+// above the tree for a book.
+import BlueprintDetail from "@components/blueprint/BlueprintDetail.astro";
+import BlueprintExport from "@components/blueprint/BlueprintExport.astro";
+import BlueprintHeading from "@components/blueprint/BlueprintHeading.astro";
+import PlannerSettings from "@components/planner/PlannerSettings.astro";
+import { shownRevisionRawPath, type LeafDetail, type Node } from "@lib/api";
+import { isPlannerKind, nodeKindLabel } from "@lib/planners";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { LIVE_REGIONS } from "@lib/live-regions";
+import TreeNode from "./TreeNode.astro";
+
+interface Props {
+	root?: Node;
+	leaf: LeafDetail | null;
+	/** Re-encoded exchange string of a book root. */
+	bookExchangeString?: string;
+	entryId: string;
+	/** The shown revision; with rawLink, its raw string (the exact upload) is linked. */
+	revisionId?: string;
+	/** The entry's live revision: its raw link needs no revision id. */
+	liveRevisionId?: string;
+	/** Link raw strings: the entry is not private. */
+	rawLink: boolean;
+	/** The entry's own title and description, shown above: a single blueprint's
+	    heading and description repeat only where they differ. */
+	entryTitle?: string;
+	entryDescription?: string;
+}
+
+const {
+	root,
+	leaf,
+	bookExchangeString,
+	entryId,
+	revisionId,
+	liveRevisionId,
+	rawLink,
+	entryTitle,
+	entryDescription,
+} = Astro.props;
+// Uploads copy the blueprint's label and description into the entry: showing
+// both would print the same heading and text twice.
+const showLabel = root !== undefined && root.label.trim() !== (entryTitle ?? "").trim();
+const showDescription =
+	root?.description !== undefined &&
+	root.description.trim() !== "" &&
+	root.description.trim() !== (entryDescription ?? "").trim();
+const rawPath =
+	rawLink && revisionId ? shownRevisionRawPath(entryId, revisionId, liveRevisionId) : undefined;
+---
+
+{root?.kind === "blueprint" && leaf ? (
+	<article>
+		{(showLabel || showDescription) && (
+			<header>
+				{showLabel && <BlueprintHeading level="h2" icons={root.icons} label={root.label} />}
+				{showDescription && <p set:html={formatRichText(root.description!)} />}
+			</header>
+		)}
+		<BlueprintDetail leaf={leaf} entryId={entryId} rawPath={rawPath}>
+			<Fragment slot="aside">
+				<slot name="info" />
+			</Fragment>
+		</BlueprintDetail>
+	</article>
+) : root && isPlannerKind(root.kind) ? (
+	<article>
+		{(showLabel || showDescription) && (
+			<header>
+				{showLabel && (
+					<BlueprintHeading
+						level="h2"
+						icons={root.icons}
+						label={root.label}
+						kind={root.kind}
+					/>
+				)}
+				{showDescription && <p set:html={formatRichText(root.description!)} />}
+			</header>
+		)}
+		<div class="book-info">
+			<slot name="info" />
+		</div>
+		<PlannerSettings kind={root.kind} settings={root.planner} />
+		{root.exchange_string && (
+			<BlueprintExport
+				exchangeString={root.exchange_string}
+				label={nodeKindLabel(root.kind)}
+				rawPath={rawPath}
+				editor={false}
+				nodeId={root.id}
+			/>
+		)}
+	</article>
+) : root ? (
+	<>
+		<div class="book-info">
+			<slot name="info" />
+		</div>
+		{bookExchangeString && (
+			<BlueprintExport
+				exchangeString={bookExchangeString}
+				label="Book"
+				rawPath={rawPath}
+				nodeId={root.id}
+			/>
+		)}
+		<div data-live-region={LIVE_REGIONS.tree} data-entry-id={entryId}>
+			<ul class="tree">
+				<TreeNode node={root} entryId={entryId} />
+			</ul>
+		</div>
+	</>
+) : (
+	<p>This entry has no content yet.</p>
+)}
+
+<script>
+	import "./tree-live.ts";
+</script>
+
+<style>
+	.book-info {
+		margin-bottom: 1.5rem;
+	}
+	/* Phones: the panes inside bring their own padding; a full card's worth
+	   around them would leave little room for the content. */
+	@media (max-width: 40rem) {
+		article {
+			padding: 0.5rem;
+		}
+	}
+	.tree {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+</style>

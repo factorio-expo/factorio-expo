@@ -1,0 +1,40 @@
+---
+// An entry's state as pills: deleted or expired, quick preview, visibility
+// other than public, spoiler, owner account deleted. Nothing for a live
+// public entry.
+import type { StaffEntry } from "@lib/api/types";
+
+interface Props {
+	entry: StaffEntry;
+}
+const { entry } = Astro.props;
+---
+
+<div class="states">
+	{entry.deleted_at && (
+		<span class="pill" data-tone="danger">
+			{entry.expired ? "expired" : "deleted"}
+		</span>
+	)}
+	{!entry.deleted_at && entry.gone && (
+		<span class="pill" data-tone="danger">
+			expired
+		</span>
+	)}
+	{entry.quick_preview && <span class="pill">quick preview</span>}
+	{entry.visibility !== "public" && <span class="pill">{entry.visibility}</span>}
+	{entry.spoiler && <span class="pill">spoiler</span>}
+	{entry.owner_deleted && (
+		<span class="pill" data-tone="warn">
+			owner deleted
+		</span>
+	)}
+</div>
+
+<style>
+	.states {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem;
+	}
+</style>

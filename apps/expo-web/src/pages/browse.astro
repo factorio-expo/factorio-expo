@@ -1,0 +1,107 @@
+---
+import SearchForm from "@components/search/SearchForm.astro";
+import SearchResults from "@components/search/SearchResults.astro";
+import Page from "@layouts/Page.astro";
+import { type Modset, type SearchResponse, type TagGroup } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server";
+import { modBadgeRefs } from "@lib/mods";
+import { tagRefs } from "@lib/tags";
+import { toCard } from "@utils/entry-card.ts";
+import { hasAdvancedFilters, PAGE_SIZE, parseSearchParams, toApiQuery } from "@lib/search/query";
+
+const url = new URL(Astro.url);
+const search = parseSearchParams(url);
+const { offset } = search;
+
+function pageHref(nextOffset: number) {
+	const pageURL = new URL(url);
+	if (nextOffset > 0) pageURL.searchParams.set("offset", String(nextOffset));
+	else pageURL.searchParams.delete("offset");
+	return `${pageURL.pathname}${pageURL.search}`;
+}
+
+// Ways out of an empty result: the text alone, or the filters alone.
+function hrefWith(keep: (key: string) => boolean) {
+	const next = new URLSearchParams();
+	for (const [key, value] of url.searchParams) if (keep(key)) next.append(key, value);
+	const query = next.toString();
+	return query ? `/browse?${query}` : "/browse";
+}
+const withoutFiltersHref = hasAdvancedFilters(search)
+	? hrefWith((key) => key === "q" || key === "sort")
+	: undefined;
+const withoutQueryHref = search.q ? hrefWith((key) => key !== "q" && key !== "offset") : undefined;
+
+const api = getServerApiClient(Astro);
+let tagGroups: TagGroup[] = [];
+let tagsError: string | null = null;
+let modsets: Modset[] = [];
+let modsetsError: string | null = null;
+let results: SearchResponse | null = null;
+let searchError: string | null = null;
+try {
+	tagGroups = (await api.tags.list()).groups;
+} catch {
+	tagsError = "Tags are temporarily unavailable.";
+}
+try {
+	modsets = (await api.modsets.list()).modsets;
+} catch {
+	modsetsError = "Mods are temporarily unavailable.";
+}
+try {
+	results = await api.search.query({ ...toApiQuery(search), facets: true });
+} catch {
+	searchError = "Search is temporarily unavailable.";
+}
+
+const lookups = {
+	tags: (slugs: string[]) => tagRefs(tagGroups, slugs),
+	modBadges: (values: string[]) => modBadgeRefs(values, modsets),
+};
+const cards = (results?.results ?? []).map((card) => toCard(card, lookups));
+if (results && offset > 0 && offset >= results.total) {
+	return Astro.redirect(
+		pageHref(Math.max(0, Math.ceil(results.total / PAGE_SIZE) - 1) * PAGE_SIZE),
+	);
+}
+// Filtered or searched result lists are endless near-duplicates; only plain
+// browse pages (paged with ?offset=) are indexed.
+const filtered = [...url.searchParams.keys()].some((key) => key !== "offset");
+---
+
+<Page
+	title={
+		search.similarTo
+			? "Similar blueprints"
+			: search.q
+				? `Search: ${search.q}`
+				: "Browse entries"
+	}
+	nav="browse"
+	description="Browse and search community Factorio blueprints and books by item, recipe, quality, tags and production rate."
+	canonicalPath={offset > 0 ? `/browse?offset=${offset}` : "/browse"}
+	noindex={filtered}
+>
+	<h1>Browse entries</h1>
+	<SearchForm
+		search={search}
+		tagGroups={tagGroups}
+		tagsError={tagsError}
+		modsets={modsets}
+		modsetsError={modsetsError}
+		kindCounts={results?.kind_counts}
+		facetCounts={results?.facet_counts}
+		advancedOpen={url.searchParams.has("advanced")}
+	/>
+	<SearchResults
+		results={results}
+		error={searchError}
+		cards={cards}
+		q={search.q}
+		offset={offset}
+		pageHref={pageHref}
+		withoutFiltersHref={withoutFiltersHref}
+		withoutQueryHref={withoutQueryHref}
+	/>
+</Page>

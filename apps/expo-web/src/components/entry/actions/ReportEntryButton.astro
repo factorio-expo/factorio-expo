@@ -1,0 +1,84 @@
+---
+// Flag button and its report dialog: a reason and a note, sent to the admins.
+// Anyone may report, signed in or not (rate limited by the API; signed out
+// through Turnstile, HumanCheck); the page
+// leaves it out for the entry's editors and quick previews. Behaviour in
+// report-entry.ts.
+import Flag from "@lucide/astro/icons/flag";
+import HumanCheck from "@components/common/HumanCheck.astro";
+import ModalDialog from "@components/common/ModalDialog.astro";
+
+interface Props {
+	entryId: string;
+	/** The revision being viewed; the report names it. */
+	revisionId?: string;
+}
+const { entryId, revisionId } = Astro.props;
+const reasons = [
+	{ value: "stolen", label: "Someone else's work, posted without permission" },
+	{ value: "offensive", label: "Offensive or inappropriate" },
+	{ value: "spam", label: "Spam or advertising" },
+	{ value: "misleading", label: "Misleading title, description or tags" },
+	{ value: "other", label: "Something else" },
+];
+---
+
+<span class="report-entry" data-report-entry={entryId} data-revision-id={revisionId}>
+	<button
+		type="button"
+		class="icon-button"
+		data-report-entry-open
+		aria-label="Report entry"
+		data-tooltip="Report entry"
+		data-placement="left"
+	>
+		<Flag aria-hidden="true" />
+	</button>
+	<ModalDialog titleId={`entry-report-${entryId}`} title="Report entry" closeLabel="Close">
+		<form data-report-entry-form>
+			<fieldset>
+				<legend>What is wrong with it?</legend>
+				{reasons.map(({ value, label }, index) => (
+					<label>
+						<input type="radio" name="reason" value={value} required={index === 0} />{" "}
+						{label}
+					</label>
+				))}
+			</fieldset>
+			<label>
+				Details <small data-report-note-hint>(optional)</small>
+				<textarea name="note" rows="4" maxlength="1000"></textarea>
+				<small data-report-stolen-hint hidden>
+					Link to the original (a post, video or save) so an admin can check it.
+				</small>
+			</label>
+			<p class="report-privacy">
+				Only the site's admins see reports. An admin reviews each one; reporting does not
+				hide the entry.
+			</p>
+			<HumanCheck action="report" />
+			<button type="submit">Send report</button>
+			<p data-report-entry-status role="status" aria-live="polite"></p>
+		</form>
+		<p data-report-entry-done hidden role="status">
+			Thanks, an admin will look at it.
+		</p>
+	</ModalDialog>
+</span>
+
+<script>
+	import "./report-entry.ts";
+</script>
+
+<style>
+	.report-entry {
+		display: contents;
+	}
+	.report-privacy {
+		font-size: 0.85rem;
+		color: var(--pico-muted-color);
+	}
+	[data-report-entry-status]:empty {
+		display: none;
+	}
+</style>

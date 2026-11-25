@@ -1,0 +1,103 @@
+---
+// "Add to collection" button and modal for authenticated viewers: the viewer's
+// collections as checkboxes and a "New collection" button that adds a named
+// row; nothing is written until Save (collection-picker.ts).
+import FolderPlus from "@lucide/astro/icons/folder-plus";
+import Plus from "@lucide/astro/icons/plus";
+import ModalDialog from "@components/common/ModalDialog.astro";
+
+interface Props {
+	entryId: string;
+}
+const { entryId } = Astro.props;
+---
+
+<span data-collection-picker data-entry-id={entryId}>
+	<button
+		type="button"
+		class="icon-button"
+		data-open-collections
+		data-auth-only
+		aria-label="Add to collection"
+		data-tooltip="Add to collection"
+	>
+		<FolderPlus aria-hidden="true" />
+	</button>
+	<ModalDialog
+		titleId={`collection-picker-title-${entryId}`}
+		title="Add to collection"
+		closeLabel="Close"
+	>
+		<form data-collection-form>
+			<ul data-collection-list></ul>
+			<p data-collection-status role="status" aria-live="polite"></p>
+			<footer class="picker-actions">
+				<button type="button" class="secondary outline" data-collection-new>
+					<Plus aria-hidden="true" />
+					New collection
+				</button>
+				<button type="submit" data-collection-save disabled>
+					Save
+				</button>
+			</footer>
+		</form>
+	</ModalDialog>
+</span>
+
+<script>
+	import "./collection-picker.ts";
+</script>
+
+<style>
+	[data-collection-list] {
+		padding: 0;
+		margin: 0 0 0.5rem;
+		list-style: none;
+	}
+	[data-collection-list] :global(li) {
+		list-style: none;
+		padding: 0.6rem 0;
+		border-top: 1px solid var(--pico-muted-border-color);
+	}
+	[data-collection-list] :global(li:first-child) {
+		border-top: none;
+	}
+	[data-collection-list] :global(label) {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin: 0;
+	}
+	[data-collection-list] :global(input[type="checkbox"]) {
+		flex: none;
+		margin: 0 0.25rem;
+	}
+	[data-collection-list] :global(input[type="text"]) {
+		margin: 0;
+	}
+	[data-collection-list] :global(small) {
+		color: var(--pico-muted-color);
+	}
+	[data-collection-status]:empty {
+		margin: 0;
+	}
+	/* The dialog's actions: create on the left, Save (the call to action) right. */
+	.picker-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin-top: 1rem;
+	}
+	.picker-actions button {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		width: auto;
+		margin: 0;
+	}
+	.picker-actions :global(svg) {
+		width: 1.1rem;
+		height: 1.1rem;
+	}
+</style>

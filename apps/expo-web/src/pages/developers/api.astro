@@ -1,0 +1,9 @@
+---
+// The read API docs: Redoc's static page of the published document, built by
+// scripts/api-docs.ts (src/generated/read-api.html, with its own CSP).
+import page from "../../generated/read-api.html?raw";
+
+export const prerender = true;
+---
+
+<Fragment set:html={page} />

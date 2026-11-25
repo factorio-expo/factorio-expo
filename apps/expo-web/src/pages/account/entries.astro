@@ -1,0 +1,37 @@
+---
+// The signed-in user's own entries, public and private, as entry cards, paged
+// (SSR). The owner's way back to a private or unlisted entry; public ones get
+// the pin toggle.
+import Pagination from "@components/common/Pagination.astro";
+import EntryGrid from "@components/entry/EntryGrid.astro";
+import Page from "@layouts/Page.astro";
+import { getServerApiClient } from "@lib/api/server.ts";
+import { listOffset, offsetHref } from "@lib/profile";
+import { redirectToLoginUnlessSignedIn } from "@lib/viewer";
+import { toCard } from "@utils/entry-card.ts";
+
+const redirect = await redirectToLoginUnlessSignedIn(Astro);
+if (redirect) return redirect;
+
+const PAGE_SIZE = 20;
+const offset = listOffset(Astro.url);
+const page = await getServerApiClient(Astro).entries.listMine({ limit: PAGE_SIZE, offset });
+---
+
+<Page title="My entries" nav="entries" noindex>
+	<h1>My entries</h1>
+	{page.entries.length === 0 ? (
+		<p role="status">You have not uploaded anything yet.</p>
+	) : (
+		<>
+			<EntryGrid cards={page.entries.map((entry) => toCard(entry))} pinnable />
+			<Pagination
+				label="Entry pages"
+				total={page.total}
+				limit={PAGE_SIZE}
+				offset={offset}
+				href={(next) => offsetHref(Astro.url, next)}
+			/>
+		</>
+	)}
+</Page>

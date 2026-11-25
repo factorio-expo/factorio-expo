@@ -1,0 +1,30 @@
+---
+// A grid of collection cards (CollectionCard): the profile's Collections tab
+// and the owner's /account/collections.
+import type { Collection } from "@lib/api";
+import CollectionCard from "./CollectionCard.astro";
+
+interface Props {
+	collections: Collection[];
+	href: (collection: Collection) => string;
+	/** The owner's own list: visibility and delete buttons. */
+	owner?: boolean;
+}
+const { collections, href, owner = false } = Astro.props;
+---
+
+<ul class="collection-grid" data-collection-rows>
+	{collections.map((collection) => (
+		<CollectionCard collection={collection} href={href(collection)} owner={owner} />
+	))}
+</ul>
+
+<style>
+	.collection-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+		gap: 1rem;
+		margin: 0 0 1rem;
+		padding: 0;
+	}
+</style>

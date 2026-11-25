@@ -1,0 +1,51 @@
+{
+	"name": "expo-web",
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "node scripts/api-docs.ts && astro dev",
+		"api-docs": "node scripts/api-docs.ts",
+		"build": "node scripts/api-docs.ts && astro build",
+		"preview": "astro preview",
+		"astro": "astro",
+		"lint": "oxlint --fix",
+		"lint:check": "oxlint",
+		"format": "oxfmt --write .",
+		"format:check": "oxfmt --check",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@astrojs/node": "catalog:",
+		"@astrojs/sitemap": "^3.7.5",
+		"@astrojs/svelte": "catalog:",
+		"@factorio-expo/ui": "workspace:*",
+		"@lucide/astro": "catalog:",
+		"@lucide/svelte": "catalog:",
+		"@picocss/pico": "catalog:",
+		"@simplewebauthn/browser": "^14.0.0",
+		"astro": "catalog:",
+		"marked": "~18.2.1",
+		"openapi-fetch": "catalog:",
+		"sanitize-html": "^2.18.2",
+		"sass": "catalog:",
+		"svelte": "catalog:",
+		"svelte-dnd-action": "^0.9.80",
+		"temporal-polyfill": "catalog:"
+	},
+	"devDependencies": {
+		"@astrojs/check": "catalog:",
+		"@astrojs/compiler-rs": "catalog:",
+		"@factorio-expo/api-types": "workspace:*",
+		"@redocly/cli": "^2.79.0",
+		"@types/sanitize-html": "^2.16.2",
+		"@typescript/typescript6": "catalog:",
+		"browserslist": "^4.29.6",
+		"lightningcss": "^1.33.0",
+		"purgecss": "^9.1.0",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	},
+	"engines": {
+		"node": ">=26"
+	}
+}

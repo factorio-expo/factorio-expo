@@ -1,0 +1,79 @@
+{
+  "modsets": [
+    { "name": "krastorio-2", "title": "Krastorio 2", "mods": ["Krastorio2"] },
+    { "name": "krastorio-2-spaced-out", "title": "Krastorio 2 Spaced Out", "mods": ["Krastorio2-spaced-out"] },
+    { "name": "space-exploration", "title": "Space Exploration", "mods": ["space-exploration"] },
+    {
+      "name": "bobs",
+      "title": "Bob's Mods",
+      "mods": [
+        "bobassembly", "bobelectronics", "bobequipment", "bobgreenhouse", "bobinserters", "boblogistics",
+        "bobmining", "bobmodules", "bobores", "bobplates", "bobpower", "bobrevamp", "bobtech",
+        "bobvehicleequipment", "bobwarfare"
+      ]
+    },
+    {
+      "name": "angels",
+      "title": "Angel's Mods",
+      "mods": [
+        "angelsrefining", "angelspetrochem", "angelssmelting", "angelsbioprocessing",
+        "angelsaddons-storage", "angelsaddons-mobility"
+      ]
+    },
+    {
+      "name": "bobs-angels",
+      "title": "Bob's and Angel's",
+      "mods": [
+        "bobassembly", "bobelectronics", "bobequipment", "bobgreenhouse", "bobinserters", "boblogistics",
+        "bobmining", "bobmodules", "bobores", "bobplates", "bobpower", "bobrevamp", "bobtech",
+        "bobvehicleequipment", "bobwarfare",
+        "angelsrefining", "angelspetrochem", "angelssmelting", "angelsbioprocessing",
+        "angelsaddons-storage", "angelsaddons-mobility"
+      ]
+    },
+    {
+      "name": "pyanodon",
+      "title": "Pyanodon's",
+      "mods": [
+        "pycoalprocessing", "pyindustry", "pyfusionenergy", "pyrawores", "pypetroleumhandling",
+        "pyhightech", "pyalienlife", "pyalternativeenergy", "pypostprocessing"
+      ]
+    },
+    { "name": "seablock", "title": "Sea Block", "mods": ["SeaBlockMetaPack21"] },
+
+    { "name": "maraxsis", "title": "Maraxsis", "mods": ["maraxsis"] },
+    { "name": "moshine", "title": "Moshine", "mods": ["Moshine"] },
+    { "name": "cerys", "title": "Cerys", "mods": ["Cerys-Moon-of-Fulgora"] },
+    { "name": "corrundum", "title": "Corrundum", "mods": ["corrundum"] },
+    { "name": "rubia", "title": "Rubia", "mods": ["rubia"] },
+    { "name": "lignumis", "title": "Lignumis", "mods": ["lignumis"] },
+    { "name": "secretas", "title": "Secretas & Frozeta", "mods": ["secretas"] },
+    { "name": "paracelsin", "title": "Paracelsin", "mods": ["Paracelsin"] },
+    { "name": "igrys", "title": "Igrys", "mods": ["Igrys"] },
+    { "name": "arig", "title": "Planetaris: Arig", "mods": ["planetaris-arig"] },
+    { "name": "vesta", "title": "Vesta", "mods": ["skewer_planet_vesta"] },
+    { "name": "tenebris", "title": "Tenebris Prime", "mods": ["tenebris-prime"] },
+
+    { "name": "aai-industry", "title": "AAI Industry", "mods": ["aai-industry"] },
+    { "name": "aai-containers", "title": "AAI Containers & Warehouses", "mods": ["aai-containers"] },
+    { "name": "aai-loaders", "title": "AAI Loaders", "mods": ["aai-loaders"] },
+    { "name": "loaders-modernized", "title": "Loaders Modernized", "mods": ["loaders-modernized"] },
+    { "name": "miniloader-redux", "title": "Miniloader (Redux)", "mods": ["miniloader-redux"] },
+    { "name": "ltn", "title": "LTN - Logistic Train Network", "mods": ["LogisticTrainNetwork"] },
+    { "name": "cybersyn", "title": "Project Cybersyn", "mods": ["cybersyn"] },
+    { "name": "cargo-ships", "title": "Cargo Ships", "mods": ["cargo-ships"] },
+    { "name": "factorissimo-3", "title": "Factorissimo 3", "mods": ["factorissimo-2-notnotmelon"] },
+    { "name": "transport-drones", "title": "Transport Drones", "mods": ["Transport_Drones"] },
+    { "name": "teleporters", "title": "Teleporters", "mods": ["Teleporters"] },
+    { "name": "warehousing", "title": "Warehousing", "mods": ["Warehousing"] },
+    { "name": "merging-chests", "title": "Merging Chests", "mods": ["WideChests"] },
+    { "name": "fluid-must-flow", "title": "Fluid Must Flow", "mods": ["FluidMustFlow"] },
+    { "name": "advanced-fluid-handling", "title": "Advanced Fluid Handling", "mods": ["underground-pipe-pack"] },
+    { "name": "flare-stack", "title": "Flare Stack", "mods": ["Flare Stack"] },
+    { "name": "ks-power", "title": "KS Power", "mods": ["KS_Power"] },
+    { "name": "plutonium-energy", "title": "Plutonium Energy", "mods": ["PlutoniumEnergy"] },
+    { "name": "nixie-tubes", "title": "Nixie Tubes", "mods": ["nixie-tubes"] },
+    { "name": "deep-core-mining", "title": "Deep Core Mining", "mods": ["vtk-deep-core-mining"] },
+    { "name": "mining-drones", "title": "Mining Drones", "mods": ["Mining_Drones"] }
+  ]
+}

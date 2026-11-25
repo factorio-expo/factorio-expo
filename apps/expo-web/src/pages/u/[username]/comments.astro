@@ -1,0 +1,106 @@
+---
+// Public profile, Comments tab: the user's comments on public entries, newest
+// first, each linking to its place in the entry's thread.
+import Pagination from "@components/common/Pagination.astro";
+import ProfileLayout from "@components/profile/ProfileLayout.astro";
+import { listOffset, loadProfile, offsetHref } from "@lib/profile";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { formatRichTextSummary } from "@factorio-expo/ui/game/rich-text.ts";
+import { renderCommentMarkdown } from "@utils/markdown";
+
+const PAGE_SIZE = 20;
+const profile = await loadProfile(Astro);
+if (!profile) return Astro.rewrite("/404");
+const { user, owner, api, description } = profile;
+const offset = listOffset(Astro.url);
+const page = await api.users.comments(user.username, { limit: PAGE_SIZE, offset });
+
+/** The thread page that starts at comment `number` (CommentThread's paging), at its anchor. */
+const commentHref = (entryId: string, number: number) =>
+	`/e/${encodeURIComponent(entryId)}?comments_after=${number - 1}#c-${number}`;
+---
+
+<ProfileLayout
+	user={user}
+	owner={owner}
+	tab="comments"
+	title={`${user.username}: comments`}
+	description={description}
+>
+	{page.comments.length === 0 ? (
+		<p>No comments on public entries yet.</p>
+	) : (
+		<>
+			<ol class="profile-comments">
+				{page.comments.map((comment) => (
+					<li>
+						<header>
+							<a
+								href={commentHref(comment.entry_id, comment.number)}
+								set:html={`${formatRichTextSummary(comment.entry_title || "Untitled blueprint")} <span class="number">#${comment.number}</span>`}
+							/>
+							<time
+								datetime={comment.created_at}
+								data-local="datetime"
+								title={comment.created_at}
+							>
+								{isoDateTime(comment.created_at)}
+							</time>
+						</header>
+						<div
+							class="body"
+							set:html={renderCommentMarkdown(comment.body, (number) =>
+								commentHref(comment.entry_id, number),
+							)}
+						/>
+					</li>
+				))}
+			</ol>
+			<Pagination
+				label="Comment pages"
+				total={page.total}
+				limit={PAGE_SIZE}
+				offset={offset}
+				href={(next) => offsetHref(Astro.url, next)}
+			/>
+		</>
+	)}
+</ProfileLayout>
+
+<style>
+	.profile-comments {
+		padding: 0;
+		list-style: none;
+	}
+	.profile-comments > li {
+		padding: 0.75rem 0;
+		border-top: 1px solid var(--pico-muted-border-color);
+		list-style: none;
+	}
+	header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.25rem 1rem;
+		margin-bottom: 0.4rem;
+	}
+	header a {
+		font-weight: 600;
+		overflow-wrap: anywhere;
+	}
+	header :global(.number) {
+		color: var(--pico-muted-color);
+		font-weight: normal;
+	}
+	time {
+		color: var(--pico-muted-color);
+		font-size: 0.875em;
+	}
+	.body {
+		overflow-wrap: anywhere;
+	}
+	.body :global(p:last-child) {
+		margin-bottom: 0;
+	}
+</style>

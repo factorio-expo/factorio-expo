@@ -1,0 +1,238 @@
+---
+// Failed jobs: preview, analysis and search jobs that failed for good,
+// newest first, with why. Re-run one, or every one shown.
+import Outcome from "@components/Outcome.astro";
+import Console from "@layouts/Console.astro";
+import { FormError, handlePost } from "@lib/api/actions";
+import { ApiError } from "@factorio-expo/ui/api/problem.ts";
+import { loadFromApi } from "@lib/api/page";
+import type { FailedJob, JobKind } from "@lib/api/types";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { formText } from "@lib/forms";
+import { siteEntryUrl } from "@lib/site";
+
+const kinds: { key: JobKind; label: string }[] = [
+	{ key: "preview", label: "Previews" },
+	{ key: "analysis", label: "Analyses" },
+	{ key: "search", label: "Search sync" },
+];
+const isKind = (value: string): value is JobKind => kinds.some((k) => k.key === value);
+
+const posted = await handlePost(Astro, async (api, form) => {
+	const reason = formText(form, "reason");
+	switch (formText(form, "action")) {
+		case "rerun": {
+			const kind = formText(form, "kind");
+			if (!isKind(kind)) throw new FormError("Unknown job kind.");
+			await api.rerunJob(kind, formText(form, "target_id"), reason);
+			return "Job queued again.";
+		}
+		case "rerun-all": {
+			// Each shown job as "kind:target"; one gone meanwhile is skipped.
+			const targets = form.getAll("job").filter((v): v is string => typeof v === "string");
+			let queued = 0;
+			for (const target of targets) {
+				const [kind = "", id = ""] = target.split(":", 2);
+				if (!isKind(kind) || !id) continue;
+				try {
+					// One at a time, so a long list does not flood the API.
+					// oxlint-disable-next-line no-await-in-loop
+					await api.rerunJob(kind, id, reason);
+					queued++;
+				} catch (error) {
+					if (!(error instanceof ApiError && error.status === 404)) throw error;
+				}
+			}
+			return `${queued} of ${targets.length} jobs queued again.`;
+		}
+		default:
+			throw new FormError("Unknown action.");
+	}
+});
+if (posted) return posted;
+
+const kindParam = Astro.url.searchParams.get("kind") ?? "";
+const kind = isKind(kindParam) ? kindParam : undefined;
+const loaded = await loadFromApi(Astro, (api) => api.failedJobs());
+const all = loaded.data;
+const shown = all?.filter((job) => !kind || job.kind === kind);
+const number = new Intl.NumberFormat("en");
+const countOf = (key?: JobKind) => all?.filter((job) => !key || job.kind === key).length ?? 0;
+
+const kindLabel: Record<JobKind, string> = {
+	preview: "Preview",
+	analysis: "Analysis",
+	search: "Search",
+};
+const subject = (job: FailedJob) =>
+	job.kind === "search"
+		? `${job.search_action === "delete" ? "removal" : "index"}`
+		: job.blueprint_label || "(unnamed blueprint)";
+---
+
+<Console
+	title="Failed jobs"
+	nav="failed-jobs"
+	description="Jobs that failed for good, newest first. A re-run starts with a fresh retry budget."
+>
+	<Outcome loadError={loaded.error} />
+
+	<nav class="tabs" aria-label="Filter jobs">
+		<a href="/jobs" aria-current={!kind ? "page" : undefined}>
+			All
+			{all && <span class="count">{number.format(countOf())}</span>}
+		</a>
+		{kinds.map((k) => (
+			<a href={`/jobs?kind=${k.key}`} aria-current={k.key === kind ? "page" : undefined}>
+				{k.label}
+				{all && <span class="count">{number.format(countOf(k.key))}</span>}
+			</a>
+		))}
+	</nav>
+
+	{shown && shown.length === 0 && <p class="empty">No failed jobs.</p>}
+	{shown && shown.length > 0 && (
+		<>
+			<form method="post" class="actions">
+				{shown.map((job) => (
+					<input type="hidden" name="job" value={`${job.kind}:${job.target_id}`} />
+				))}
+				<input
+					type="text"
+					name="reason"
+					placeholder="Note (optional)"
+					aria-label="Note"
+					maxlength="500"
+				/>
+				<button
+					type="submit"
+					name="action"
+					value="rerun-all"
+					data-confirm={`Re-run all ${shown.length} jobs shown?`}
+				>
+					Re-run all {number.format(shown.length)} shown
+				</button>
+			</form>
+
+			<div class="table-wrap">
+				<table class="data">
+					<thead>
+						<tr>
+							<th scope="col">Job</th>
+							<th scope="col">Entry</th>
+							<th scope="col">Failure</th>
+							<th scope="col">Failed</th>
+							<th scope="col" class="num">
+								Retries
+							</th>
+							<th scope="col" aria-label="Actions"></th>
+						</tr>
+					</thead>
+					<tbody>
+						{shown.map((job) => {
+							const link = siteEntryUrl(job.entry_id);
+							const title = job.entry_title || "(untitled)";
+							return (
+								<tr>
+									<td>
+										<span class="pill">{kindLabel[job.kind]}</span>
+										<div class="muted small">{subject(job)}</div>
+									</td>
+									<td>
+										{link ? (
+											<a
+												href={link}
+												target="_blank"
+												rel="noopener noreferrer"
+											>
+												{title}
+											</a>
+										) : (
+											title
+										)}
+										<div class="muted small">
+											<a
+												href={`/entries/${encodeURIComponent(job.entry_id)}`}
+											>
+												<code>{job.entry_id}</code>
+											</a>
+											{!job.entry_live && (
+												<span class="pill" data-tone="warn">
+													deleted or expired
+												</span>
+											)}
+										</div>
+									</td>
+									<td class="failure">
+										<code>{job.failure_code || "(no code)"}</code>
+										{job.failure_detail && (
+											<details class="more">
+												<summary>Details</summary>
+												<pre>{job.failure_detail}</pre>
+											</details>
+										)}
+									</td>
+									<td class="nowrap">{isoDateTime(job.failed_at)}</td>
+									<td class="num">{number.format(job.retry_count)}</td>
+									<td>
+										<form method="post">
+											<input type="hidden" name="kind" value={job.kind} />
+											<input
+												type="hidden"
+												name="target_id"
+												value={job.target_id}
+											/>
+											<button
+												type="submit"
+												name="action"
+												value="rerun"
+												class="secondary"
+											>
+												Re-run
+											</button>
+										</form>
+									</td>
+								</tr>
+							);
+						})}
+					</tbody>
+				</table>
+			</div>
+			{all && all.length >= 500 && (
+				<p class="muted">Only the newest 500 failed jobs are shown.</p>
+			)}
+		</>
+	)}
+</Console>
+
+<style>
+	.small {
+		font-size: 0.85rem;
+	}
+	.nowrap {
+		white-space: nowrap;
+	}
+	.failure {
+		min-width: 10rem;
+		max-width: 28rem;
+	}
+	/* Long snake_case codes wrap instead of widening the table. */
+	.failure code {
+		overflow-wrap: anywhere;
+	}
+	.failure pre {
+		margin: 0.3rem 0 0;
+		max-height: 16rem;
+		overflow: auto;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		font-size: 0.8rem;
+	}
+	td form {
+		margin: 0;
+	}
+	td form button {
+		margin: 0;
+		padding: 0.25rem 0.7rem;
+	}
+</style>

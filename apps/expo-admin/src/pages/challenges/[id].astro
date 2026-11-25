@@ -1,0 +1,624 @@
+---
+// One challenge: publish or hide it, its checked entries with overrides,
+// and the editor. Once started, rule changes need the rescore confirmed.
+import RichText from "@factorio-expo/ui/game/RichText.astro";
+import ChallengeEditor from "@components/ChallengeEditor.astro";
+import Outcome from "@components/Outcome.astro";
+import Console from "@layouts/Console.astro";
+import { FormError, failureMessage, handlePost } from "@lib/api/actions";
+import { adminApi } from "@lib/api/client";
+import { loadFromApi } from "@lib/api/page";
+import type { ChallengeFields } from "@lib/api/types";
+import { saveEditor } from "@lib/challenge-form";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { formText, outcomeUrl } from "@lib/forms";
+import { siteEntryUrl, sitePageUrl } from "@lib/site";
+
+const id = Astro.params.id!;
+// The editor's save renders the page again on failure, keeping what was
+// typed; the other forms post, redirect and get (handlePost).
+let saveError: string | undefined;
+let draft: ChallengeFields | undefined;
+if (Astro.request.method === "POST") {
+	const form = await Astro.request
+		.clone()
+		.formData()
+		.catch(() => undefined);
+	if (form && formText(form, "action") === "save") {
+		const api = adminApi(Astro.locals.staff.username);
+		const result = await saveEditor(
+			form,
+			(fields) => api.updateChallenge(id, fields),
+			failureMessage,
+		);
+		if (!result.error) return Astro.redirect(outcomeUrl(Astro.url, "notice", "Saved."), 303);
+		saveError = result.error;
+		draft = result.draft;
+	}
+}
+if (Astro.request.method === "POST") {
+	const form = await Astro.request
+		.clone()
+		.formData()
+		.catch(() => undefined);
+	if (form && formText(form, "action") === "test") {
+		try {
+			const entryId = await adminApi(Astro.locals.staff.username).startChallengeTest(
+				id,
+				formText(form, "exchange_string"),
+			);
+			return Astro.redirect(
+				`/challenges/${id}?test=${encodeURIComponent(entryId)}#test`,
+				303,
+			);
+		} catch (error) {
+			return Astro.redirect(outcomeUrl(Astro.url, "error", failureMessage(error)), 303);
+		}
+	}
+}
+const posted = saveError
+	? undefined
+	: await handlePost(Astro, async (api, form) => {
+			switch (formText(form, "action")) {
+				case "publish":
+					await api.publishChallenge(id, true);
+					return "Published: it shows on the site.";
+				case "unpublish":
+					await api.publishChallenge(id, false);
+					return "Hidden: it is a draft again.";
+				case "delete":
+					await api.deleteChallenge(id);
+					return "Deleted.";
+				case "verdict": {
+					const verdict = formText(form, "verdict");
+					if (verdict !== "" && verdict !== "accepted" && verdict !== "rejected")
+						throw new FormError("Pick a verdict.");
+					await api.setSubmissionVerdict(
+						id,
+						formText(form, "submission_id"),
+						verdict,
+						formText(form, "reason"),
+					);
+					return verdict ? "Verdict saved." : "Override cleared: the rule check decides.";
+				}
+				case "void-votes": {
+					const voiding = formText(form, "mode") !== "restore";
+					const changed = await api.voidVotes(id, {
+						userId: formText(form, "user_id"),
+						entryId: formText(form, "entry_id"),
+						void: voiding,
+						reason: formText(form, "reason"),
+					});
+					return voiding
+						? `Voided ${changed} vote${changed === 1 ? "" : "s"}: they no longer count.`
+						: `Restored ${changed} vote${changed === 1 ? "" : "s"}.`;
+				}
+				default:
+					throw new FormError("Unknown action.");
+			}
+		});
+if (posted) {
+	// A deleted challenge has no page to go back to.
+	if (posted.headers.get("location")?.includes("notice=Deleted"))
+		return Astro.redirect("/challenges?notice=Deleted.", 303);
+	return posted;
+}
+
+const testEntryId = Astro.url.searchParams.get("test") ?? "";
+const loaded = await loadFromApi(Astro, async (api) => {
+	const challenge = await api.challenge(id);
+	const voting = challenge.published_at && challenge.status !== "upcoming";
+	return {
+		challenge,
+		params: await api.challengeParams(),
+		oversight: voting ? await api.challengeOversight(id) : undefined,
+		test: testEntryId
+			? await api.challengeTest(id, testEntryId).catch(() => undefined)
+			: undefined,
+	};
+});
+const challenge = loaded.data?.challenge;
+const oversight = loaded.data?.oversight;
+const test = loaded.data?.test;
+const titles = new Map(challenge?.entries.map((entry) => [entry.entry_id, entry.title]) ?? []);
+const titleOf = (entryId: string) => titles.get(entryId) ?? entryId;
+const flagLabels: Record<string, string> = {
+	new_account: "new account",
+	signup_cluster: "signup cluster",
+	spike: "vote spike",
+	flagged_voters: "mostly flagged voters",
+};
+const hourText = (hour: string) => `${isoDateTime(hour).slice(0, 13).replace("T", " ")}:00`;
+const started = Boolean(
+	challenge?.published_at && new Date(challenge.starts_at).getTime() <= Date.now(),
+);
+const publicUrl = challenge ? sitePageUrl(`/challenges/${challenge.slug}`) : undefined;
+---
+
+<Console
+	title={challenge ? `Challenge: ${challenge.title}` : "Challenge"}
+	nav="challenges"
+	description={challenge ? `Status: ${challenge.status}` : undefined}
+>
+	<Outcome loadError={loaded.error ?? saveError} />
+	{challenge && loaded.data && (
+		<>
+			<section class="panel">
+				<div class="panel-head">
+					<h2>Status: {challenge.status}</h2>
+				</div>
+				<p>
+					{isoDateTime(challenge.starts_at)} to {isoDateTime(challenge.ends_at)}, voting
+					until {isoDateTime(challenge.voting_ends_at)}.
+					{publicUrl && challenge.published_at && (
+						<>
+							{" "}
+							<a href={publicUrl} target="_blank" rel="noopener">
+								Open on the site
+							</a>
+						</>
+					)}
+				</p>
+				<p>
+					<strong>Goal:</strong> <RichText text={challenge.rules_text.goal} />
+				</p>
+				<ul>
+					{challenge.rules_text.restrictions.map((line) => (
+						<li>
+							<RichText text={line} />
+						</li>
+					))}
+				</ul>
+				<form method="post" class="actions">
+					{challenge.published_at ? (
+						!started && (
+							<button type="submit" name="action" value="unpublish" class="secondary">
+								Unpublish
+							</button>
+						)
+					) : (
+						<>
+							<button
+								type="submit"
+								name="action"
+								value="publish"
+								data-confirm="Publish this challenge? It shows on the site at once."
+							>
+								Publish
+							</button>
+							<button
+								type="submit"
+								name="action"
+								value="delete"
+								class="danger"
+								data-confirm="Delete this draft?"
+							>
+								Delete draft
+							</button>
+						</>
+					)}
+				</form>
+			</section>
+
+			<section class="panel">
+				<div class="panel-head">
+					<h2>Entries ({challenge.entries.length})</h2>
+				</div>
+				{challenge.entries.length === 0 ? (
+					<p class="empty">No entries yet.</p>
+				) : (
+					<table class="data">
+						<thead>
+							<tr>
+								<th>Rank</th>
+								<th>Entry</th>
+								<th>By</th>
+								<th>Status</th>
+								<th>Score</th>
+								<th>Votes</th>
+								<th>Override</th>
+							</tr>
+						</thead>
+						<tbody>
+							{challenge.entries.map((entry) => {
+								const siteUrl = siteEntryUrl(entry.entry_id);
+								return (
+									<tr>
+										<td>{entry.rank || ""}</td>
+										<td>
+											<a href={`/entries/${entry.entry_id}`}>
+												<RichText
+													text={entry.title}
+													fallback={entry.entry_id}
+												/>
+											</a>
+											{siteUrl && (
+												<>
+													{" "}
+													<a
+														href={siteUrl}
+														target="_blank"
+														rel="noopener"
+													>
+														site
+													</a>
+												</>
+											)}
+										</td>
+										<td>{entry.username}</td>
+										<td>
+											<span class="pill">{entry.status}</span>
+											{entry.reasons.length > 0 && (
+												<ul class="reasons">
+													{entry.reasons.map((reason) => (
+														<li>{reason}</li>
+													))}
+												</ul>
+											)}
+										</td>
+										<td>{entry.score_text}</td>
+										<td>{entry.votes}</td>
+										<td>
+											<form method="post" class="actions">
+												<input
+													type="hidden"
+													name="action"
+													value="verdict"
+												/>
+												<input
+													type="hidden"
+													name="submission_id"
+													value={entry.submission_id}
+												/>
+												<select name="verdict" aria-label="Verdict">
+													<option
+														value=""
+														selected={entry.staff_verdict === ""}
+													>
+														Rule check
+													</option>
+													<option
+														value="accepted"
+														selected={
+															entry.staff_verdict === "accepted"
+														}
+													>
+														Accept
+													</option>
+													<option
+														value="rejected"
+														selected={
+															entry.staff_verdict === "rejected"
+														}
+													>
+														Disqualify
+													</option>
+												</select>
+												<input
+													type="text"
+													name="reason"
+													value={entry.staff_reason}
+													placeholder="Reason (shown on the site)"
+													aria-label="Reason"
+													maxlength="500"
+												/>
+												<button type="submit" class="secondary">
+													Save
+												</button>
+											</form>
+										</td>
+									</tr>
+								);
+							})}
+						</tbody>
+					</table>
+				)}
+			</section>
+
+			{oversight && (
+				<section class="panel" id="oversight">
+					<div class="panel-head">
+						<h2>Voting oversight</h2>
+					</div>
+					<p class="muted">
+						Signs, not verdicts: a new account is under a week old at its first vote or
+						was made after the start; a signup cluster is three or more accounts made
+						within an hour of each other; a spike is half of an entry's votes in one
+						hour. A voided vote stops counting but keeps its place, so the voter cannot
+						take it back and give it again.
+					</p>
+					{oversight.entries.length === 0 ? (
+						<p class="empty">No votes yet.</p>
+					) : (
+						<>
+							<table class="data">
+								<thead>
+									<tr>
+										<th>Entry</th>
+										<th>Counted</th>
+										<th>Voided</th>
+										<th>From flagged voters</th>
+										<th>Signs</th>
+										<th>Busiest hour</th>
+									</tr>
+								</thead>
+								<tbody>
+									{oversight.entries.map((entry) => {
+										const busiest = entry.hours.reduce(
+											(best, hour) => (hour.votes > best.votes ? hour : best),
+											{ hour: "", votes: 0 },
+										);
+										return (
+											<tr>
+												<td>
+													<a href={`/entries/${entry.entry_id}`}>
+														<RichText
+															text={titleOf(entry.entry_id)}
+															fallback={entry.entry_id}
+														/>
+													</a>
+												</td>
+												<td>{entry.votes}</td>
+												<td>{entry.voided}</td>
+												<td>{entry.flagged_votes}</td>
+												<td>
+													{entry.flags.map((flag) => (
+														<span class="pill">
+															{flagLabels[flag] ?? flag}
+														</span>
+													))}
+												</td>
+												<td>
+													{busiest.votes > 0
+														? `${busiest.votes} at ${hourText(busiest.hour)}`
+														: ""}
+												</td>
+											</tr>
+										);
+									})}
+								</tbody>
+							</table>
+							<table class="data">
+								<thead>
+									<tr>
+										<th>Voter</th>
+										<th>Account made</th>
+										<th>Signs</th>
+										<th>Votes</th>
+										<th>Void</th>
+									</tr>
+								</thead>
+								<tbody>
+									{oversight.voters.map((voter) => (
+										<tr>
+											<td>
+												<a href={`/users/${voter.user_id}`}>
+													{voter.username}
+												</a>
+											</td>
+											<td>{isoDateTime(voter.account_created_at)}</td>
+											<td>
+												{voter.flags.map((flag) => (
+													<span class="pill">
+														{flagLabels[flag] ?? flag}
+													</span>
+												))}
+											</td>
+											<td>
+												<ul class="reasons">
+													{voter.votes.map((vote) => (
+														<li>
+															<RichText
+																text={titleOf(vote.entry_id)}
+																fallback={vote.entry_id}
+															/>
+															{vote.voided && (
+																<>
+																	{" "}
+																	<span class="pill">
+																		voided
+																	</span>{" "}
+																	{vote.void_reason}
+																</>
+															)}
+														</li>
+													))}
+												</ul>
+											</td>
+											<td>
+												<form method="post" class="actions">
+													<input
+														type="hidden"
+														name="action"
+														value="void-votes"
+													/>
+													<input
+														type="hidden"
+														name="user_id"
+														value={voter.user_id}
+													/>
+													<input
+														type="text"
+														name="reason"
+														placeholder="Reason (to void)"
+														aria-label="Reason"
+														maxlength="500"
+													/>
+													<button
+														type="submit"
+														name="mode"
+														value="void"
+														class="secondary"
+														data-confirm={`Void all of ${voter.username}'s votes in this challenge?`}
+													>
+														Void all
+													</button>
+													<button
+														type="submit"
+														name="mode"
+														value="restore"
+														class="secondary"
+													>
+														Restore all
+													</button>
+												</form>
+												{voter.votes.length > 1 && (
+													<details>
+														<summary>One vote</summary>
+														{voter.votes.map((vote) => (
+															<form method="post" class="actions">
+																<input
+																	type="hidden"
+																	name="action"
+																	value="void-votes"
+																/>
+																<input
+																	type="hidden"
+																	name="user_id"
+																	value={voter.user_id}
+																/>
+																<input
+																	type="hidden"
+																	name="entry_id"
+																	value={vote.entry_id}
+																/>
+																<input
+																	type="text"
+																	name="reason"
+																	placeholder="Reason (to void)"
+																	aria-label="Reason"
+																	maxlength="500"
+																/>
+																<button
+																	type="submit"
+																	name="mode"
+																	value={
+																		vote.voided
+																			? "restore"
+																			: "void"
+																	}
+																	class="secondary"
+																>
+																	{vote.voided
+																		? "Restore"
+																		: "Void"}{" "}
+																	<RichText
+																		text={titleOf(
+																			vote.entry_id,
+																		)}
+																		fallback={vote.entry_id}
+																	/>
+																</button>
+															</form>
+														))}
+													</details>
+												)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</>
+					)}
+				</section>
+			)}
+
+			<section class="panel" id="test">
+				<div class="panel-head">
+					<h2>Test a blueprint</h2>
+				</div>
+				<p class="muted">
+					Paste a blueprint string to see how it scores against these rules, line by line,
+					draft or live. It runs as an ordinary quick preview (rendered and analysed like
+					an upload, gone after a day, never entered).
+				</p>
+				<form method="post">
+					<input type="hidden" name="action" value="test" />
+					<textarea
+						name="exchange_string"
+						rows="4"
+						placeholder="0eNq..."
+						aria-label="Blueprint string"
+						required
+					></textarea>
+					<button type="submit">Test it</button>
+				</form>
+				{testEntryId && !test && (
+					<p class="empty">That test blueprint is gone (quick previews last a day).</p>
+				)}
+				{test && (
+					<div data-test-pending={test.status === "pending" ? "" : undefined}>
+						<p>
+							<strong>
+								{test.status === "pending"
+									? "Analysing... this page checks again in a few seconds."
+									: test.status === "accepted"
+										? `Accepted: score ${test.score_text}`
+										: "Rejected"}
+							</strong>{" "}
+							<a href={siteEntryUrl(test.entry_id)} target="_blank" rel="noopener">
+								preview
+							</a>
+						</p>
+						{test.reasons.length > 0 && (
+							<ul class="reasons">
+								{test.reasons.map((reason) => (
+									<li>{reason}</li>
+								))}
+							</ul>
+						)}
+						<table class="data">
+							<thead>
+								<tr>
+									<th>Rule</th>
+									<th>Measured</th>
+									<th>Result</th>
+								</tr>
+							</thead>
+							<tbody>
+								{test.lines.map((line) => (
+									<tr>
+										<td>
+											<RichText text={line.rule} />
+										</td>
+										<td>{line.value || "not measured yet"}</td>
+										<td>
+											{line.goal
+												? "score"
+												: line.value
+													? line.pass
+														? "passes"
+														: "fails"
+													: ""}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				)}
+			</section>
+
+			<ChallengeEditor
+				values={draft ?? challenge}
+				params={loaded.data.params}
+				started={started}
+				submitLabel="Save changes"
+			/>
+		</>
+	)}
+</Console>
+
+<script>
+	// An unfinished test blueprint is checked again every few seconds.
+	if (document.querySelector("[data-test-pending]")) {
+		setTimeout(() => location.reload(), 4000);
+	}
+</script>
+
+<style>
+	.reasons {
+		margin: 0.25rem 0 0;
+		font-size: 0.85rem;
+	}
+</style>

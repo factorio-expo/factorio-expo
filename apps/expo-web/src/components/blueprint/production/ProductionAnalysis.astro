@@ -1,0 +1,262 @@
+---
+// Production card: rate unit segmented control (time units, then belt tiers
+// by icon), multiplier, power/pollution totals and the ingredient /
+// intermediate / product columns.
+import type { Production } from "@lib/api";
+import { productionTimescales, rateDivisors } from "@utils/production.ts";
+import Captions from "@lucide/astro/icons/captions";
+import CaptionsOff from "@lucide/astro/icons/captions-off";
+import Collapsible from "@components/common/Collapsible.astro";
+import FailureNote from "@components/common/FailureNote.astro";
+import GameIcon from "@factorio-expo/ui/game/GameIcon.astro";
+import MaterialRow from "./MaterialRow.astro";
+import ProductionColumn from "./ProductionColumn.astro";
+import ProductionTotals from "./ProductionTotals.astro";
+
+interface Props {
+	production: Production;
+}
+
+const { production } = Astro.props;
+const ready = production.availability === "ready";
+const { tiles, megawatts } = rateDivisors(production);
+const timeUnits = productionTimescales.filter((scale) => !scale.belt);
+const beltUnits = productionTimescales.filter((scale) => scale.belt);
+const columns = [
+	{
+		title: "Ingredients",
+		modifier: "ingredients",
+		variant: "ingredient",
+		materials: production.ingredients ?? [],
+	},
+	{
+		title: "Intermediates",
+		modifier: "intermediates",
+		variant: "intermediate",
+		materials: production.intermediates ?? [],
+	},
+	{
+		title: "Products",
+		modifier: "products",
+		variant: "product",
+		materials: production.products ?? [],
+	},
+] as const;
+---
+
+<div data-production>
+	<Collapsible title="Production">
+		<button
+			slot="actions"
+			type="button"
+			class="icon-button"
+			data-names-toggle
+			aria-pressed="false"
+			data-tooltip="Show names"
+			data-placement="left"
+			aria-label="Show names"
+		>
+			<CaptionsOff data-names-icon="on" />
+			<Captions data-names-icon="off" />
+		</button>
+		<header class="production-header">
+			<fieldset class="timescale" data-production-timescale disabled={!ready}>
+				<legend class="visually-hidden">Rate unit</legend>
+				<div class="segments">
+					{timeUnits.map((scale, index) => (
+						<label class="segment" title={scale.label}>
+							<input
+								type="radio"
+								name="production-timescale"
+								value={scale.value}
+								checked={index === 0}
+							/>
+							<span aria-hidden="true">{scale.suffix}</span>
+							<span class="visually-hidden">{scale.label}</span>
+						</label>
+					))}
+				</div>
+				<div class="segments">
+					{beltUnits.map((scale) => (
+						<label class="segment" title={scale.label}>
+							<input type="radio" name="production-timescale" value={scale.value} />
+							<GameIcon prototypeType="item" name={scale.beltItem!} decorative />
+							<span class="visually-hidden">{scale.label}</span>
+						</label>
+					))}
+				</div>
+			</fieldset>
+			<span class="times" aria-hidden="true">
+				×
+			</span>
+			<label>
+				<input
+					type="number"
+					data-production-factor
+					aria-label="Production multiplier"
+					min="0"
+					step="any"
+					value="1"
+					disabled={!ready}
+				/>
+			</label>
+		</header>
+		<p data-belt-note hidden>
+			<small>
+				Belt equivalents apply to items only. Fluids and pollution remain per second; power
+				remains in kW.
+			</small>
+		</p>
+		{production.availability === "failed" ? (
+			<FailureNote title="Production analysis failed." code={production.failure_code} />
+		) : production.availability !== "ready" ? (
+			<p aria-busy="true">Loading...</p>
+		) : (
+			<Fragment>
+				{production.stale && (
+					<p>
+						<small>Analysis may be out of date.</small>
+					</p>
+				)}
+				<ProductionTotals production={production} />
+				<div class="production-columns">
+					{columns.map((column) => (
+						<ProductionColumn
+							title={column.title}
+							modifier={column.modifier}
+							count={column.materials.length}
+						>
+							{column.materials.map((material) => (
+								<MaterialRow
+									material={material}
+									variant={column.variant}
+									tiles={tiles}
+									megawatts={megawatts}
+								/>
+							))}
+						</ProductionColumn>
+					))}
+				</div>
+			</Fragment>
+		)}
+	</Collapsible>
+</div>
+
+<script>
+	import "./production-timescale.ts";
+</script>
+
+<style>
+	.production-columns {
+		margin-top: 0.75rem;
+	}
+
+	[data-names-toggle][aria-pressed="false"] [data-names-icon="on"],
+	[data-names-toggle][aria-pressed="true"] [data-names-icon="off"] {
+		display: none;
+	}
+
+	.production-header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		margin-top: 0.5rem;
+		gap: 0.5rem;
+	}
+
+	/* The fieldset lays out no box of its own: both pills and the multiplier
+	   wrap as one row, so a phone puts the belt pills beside the multiplier
+	   instead of giving each its own line. */
+	.timescale {
+		display: contents;
+	}
+
+	/* The belt pill pushes the multiplier to the right edge. */
+	.segments:last-of-type {
+		margin-right: auto;
+	}
+
+	/* One pill per group; the segments inside share its border. */
+	.segments {
+		display: inline-flex;
+		overflow: hidden;
+		border: var(--pico-border-width) solid var(--pico-form-element-border-color);
+		border-radius: 999px;
+		background: var(--pico-form-element-background-color);
+	}
+
+	.segment {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 2.75rem;
+		height: 2.25rem;
+		margin: 0;
+		padding: 0 0.75rem;
+		color: var(--pico-muted-color);
+		font-size: 0.875rem;
+		cursor: pointer;
+		transition:
+			background-color 0.15s,
+			color 0.15s;
+	}
+
+	.segment + .segment {
+		border-left: var(--pico-border-width) solid var(--pico-form-element-border-color);
+	}
+
+	/* The radio stays focusable and announced; the label is what you see. */
+	.segment input {
+		position: absolute;
+		inset: 0;
+		margin: 0;
+		opacity: 0;
+		cursor: inherit;
+	}
+
+	/* Sprite icons are em-sized (their sheet offsets too): scale by font-size. */
+	.segment :global(.factorio-icon) {
+		font-size: 1.35rem;
+	}
+
+	.segment:hover {
+		color: var(--pico-color);
+	}
+
+	.segment:has(input:checked) {
+		background: var(--pico-primary-background);
+		color: var(--pico-primary-inverse);
+	}
+
+	.segment:has(input:focus-visible) {
+		outline: var(--pico-outline-width) solid var(--pico-primary-focus);
+		outline-offset: calc(var(--pico-outline-width) * -1);
+	}
+
+	.timescale:disabled .segment {
+		cursor: not-allowed;
+		opacity: 0.5;
+	}
+
+	.times {
+		color: var(--pico-muted-color);
+	}
+
+	.production-header label:has(input[type="number"]) {
+		margin: 0;
+	}
+
+	.production-header input[type="number"] {
+		width: 4.5rem;
+		height: 2.25rem;
+		margin: 0;
+		padding-block: 0;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.segment {
+			transition: none;
+		}
+	}
+</style>

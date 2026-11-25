@@ -1,0 +1,133 @@
+---
+// Result count, card grid and pagination, or the matching empty/error state.
+import EntryGrid from "@components/entry/EntryGrid.astro";
+import Pagination from "@components/common/Pagination.astro";
+import type { SearchResponse } from "@lib/api";
+import type { EntryCardData } from "@utils/entry-card.ts";
+import { PAGE_SIZE } from "@lib/search/query";
+import { uploadPause } from "@lib/site-pause";
+import { getSiteStatus } from "@lib/site-status";
+import { getViewer } from "@lib/viewer";
+import SearchX from "@lucide/astro/icons/search-x";
+import Upload from "@lucide/astro/icons/upload";
+
+interface Props {
+	results: SearchResponse | null;
+	/** results.results with tags already turned into display names. */
+	cards: EntryCardData[];
+	error: string | null;
+	q: string;
+	offset: number;
+	pageHref: (offset: number) => string;
+	/** The same search without its advanced filters; set only when filters are active. */
+	withoutFiltersHref?: string;
+	/** The same filters without the text query; set only when there is one. */
+	withoutQueryHref?: string;
+}
+
+const { results, cards, error, q, offset, pageHref, withoutFiltersHref, withoutQueryHref } =
+	Astro.props;
+const uploadPaused = uploadPause(await getSiteStatus(), (await getViewer(Astro)).state === "in");
+---
+
+{error && <p role="alert">{error}</p>}
+
+{results && results.results.length === 0 && (
+	<section class="empty-results" aria-labelledby="empty-results-title">
+		<SearchX class="empty-icon" aria-hidden="true" />
+		<h2 id="empty-results-title">No results found{q ? ` for "${q}"` : ""}.</h2>
+		<p>
+			{withoutFiltersHref
+				? "Filters narrow results to what the analysis found; try fewer of them."
+				: "Try another word, or search by item or recipe under Advanced search."}
+		</p>
+		<div class="empty-actions">
+			{withoutFiltersHref && (
+				<a href={withoutFiltersHref} role="button" class="secondary outline">
+					Clear filters
+				</a>
+			)}
+			{withoutQueryHref && (
+				<a href={withoutQueryHref} role="button" class="secondary outline">
+					Clear search text
+				</a>
+			)}
+			{uploadPaused ? (
+				<a role="button" class="outline" aria-disabled="true" title={uploadPaused}>
+					<Upload aria-hidden="true" />
+					Upload a blueprint
+				</a>
+			) : (
+				<a href="/upload" role="button" class="outline">
+					<Upload aria-hidden="true" />
+					Upload a blueprint
+				</a>
+			)}
+		</div>
+	</section>
+)}
+
+{results && results.results.length > 0 && (
+	<>
+		<p class="result-count">
+			{results.total} {results.total === 1 ? "result" : "results"}
+			{results.total > PAGE_SIZE &&
+				` · Showing ${offset + 1}–${Math.min(offset + results.results.length, results.total)}`}
+		</p>
+		<EntryGrid cards={cards} />
+		<Pagination total={results.total} limit={PAGE_SIZE} offset={offset} href={pageHref} />
+	</>
+)}
+
+<style>
+	.result-count {
+		color: var(--pico-muted-color);
+	}
+
+	.empty-results {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 3rem 1rem;
+		border: var(--pico-border-width) dashed var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+		text-align: center;
+	}
+
+	.empty-results :global(.empty-icon) {
+		width: 3rem;
+		height: 3rem;
+		margin-bottom: 1rem;
+		color: var(--pico-muted-color);
+	}
+
+	.empty-results h2 {
+		margin-bottom: 0.5rem;
+		font-size: 1.25rem;
+		overflow-wrap: anywhere;
+	}
+
+	.empty-results p {
+		max-width: 32rem;
+		color: var(--pico-muted-color);
+	}
+
+	.empty-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.75rem;
+	}
+
+	.empty-actions a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0;
+	}
+
+	.empty-actions :global(svg) {
+		width: 1.1rem;
+		height: 1.1rem;
+	}
+</style>

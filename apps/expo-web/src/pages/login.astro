@@ -1,0 +1,55 @@
+---
+import SignIn from "@components/auth/SignIn.astro";
+import Page from "@layouts/Page.astro";
+import { PUBLIC_TURNSTILE_SITE_KEY } from "astro:env/client";
+import type { SignInProvider } from "@lib/api";
+import { dropSignupCookies, getServerApiClient } from "@lib/api/server";
+import { safeNext } from "@lib/safe-next";
+import { signInErrorText } from "@lib/sign-in-errors";
+import { allowTurnstile } from "@lib/turnstile";
+import { redirectIfSignedIn } from "@lib/viewer";
+
+// A pending provider sign-up ends here (docs/frontend.md#authentication).
+dropSignupCookies(Astro.cookies);
+const next = safeNext(Astro.url.searchParams.get("next"), Astro.url.origin);
+const signedIn = await redirectIfSignedIn(Astro, next);
+if (signedIn) return signedIn;
+
+let providers: SignInProvider[] = [];
+try {
+	providers = (await getServerApiClient(Astro).auth.providers()).providers;
+} catch {
+	// The passkey sign-in still works; the provider links are missing.
+}
+const error = signInErrorText(Astro.url.searchParams.get("error"));
+// The "I'm new here" passkey form runs the sign-up human check.
+allowTurnstile(Astro.csp, PUBLIC_TURNSTILE_SITE_KEY);
+---
+
+<Page title="Log in" noindex>
+	<h1>Log in</h1>
+	<p>Accounts add favorites, collections and ownership. Uploading never requires one.</p>
+	{error && (
+		<p role="alert" class="notice">
+			{error}
+		</p>
+	)}
+	<SignIn providers={providers} next={next} />
+	<p>
+		<small>
+			Lost the login your account used?{" "}
+			<a href="/recover">Recover it with your recovery code</a>.
+		</small>
+	</p>
+	<p>
+		<small>
+			How your data is handled: <a href="/privacy-policy">privacy policy</a>.
+		</small>
+	</p>
+</Page>
+
+<style>
+	.notice {
+		color: var(--pico-del-color);
+	}
+</style>

@@ -1,0 +1,32 @@
+// The one icon-button look of both apps (the theme switcher, the icon
+// picker's options, a filter row's remove button): square, no border,
+// transparent until hovered. Each app's global.scss uses it after Pico; set
+// --icon-button-size to change the default size. Sizing is :where() so
+// components can override it.
+:is(button, [role="button"]).icon-button {
+	--pico-background-color: transparent;
+	--pico-border-color: transparent;
+	--pico-color: var(--pico-contrast);
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	border: 0;
+
+	&:not(:disabled, [aria-disabled="true"]):is(:hover, :active) {
+		--pico-background-color: var(--pico-primary-focus);
+		--pico-color: var(--pico-primary-hover);
+	}
+}
+
+:where(button, [role="button"]).icon-button {
+	width: var(--icon-button-size, 2.75rem);
+	height: var(--icon-button-size, 2.75rem);
+	margin: 0;
+	padding: 0;
+
+	svg {
+		width: 1.15rem;
+		height: 1.15rem;
+	}
+}

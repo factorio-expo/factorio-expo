@@ -1,0 +1,95 @@
+---
+// The mods a leaf needs (mod detection from its entity and recipe names), as
+// the entry details panel's "Mods" value; "None" for a vanilla blueprint.
+import type { ModDetection } from "@lib/api";
+import { modLabels, usesThirdPartyMods } from "@lib/mods";
+
+interface Props {
+	mods?: ModDetection;
+}
+
+const { mods } = Astro.props;
+const labels = modLabels(mods);
+const partial = usesThirdPartyMods(mods);
+const unknown = [...(mods?.unknown_entities ?? []), ...(mods?.unknown_recipes ?? [])].toSorted();
+---
+
+<section class="mods" aria-label="Mods">
+	{labels.length === 0 ? (
+		"None"
+	) : (
+		<ul class="needed" aria-label="Needed mods">
+			{labels.map((label) => (
+				<li title={label.title}>{label.text}</li>
+			))}
+		</ul>
+	)}
+	{partial && (
+		<small class="note">The preview and analysis leave out what the other mods add.</small>
+	)}
+	{unknown.length > 0 && (
+		<details>
+			<summary>
+				<small>Names no listed mod defines ({unknown.length})</small>
+			</summary>
+			<ul class="unknown" aria-label="Unknown names">
+				{unknown.map((name) => (
+					<li>
+						<code>{name}</code>
+					</li>
+				))}
+			</ul>
+		</details>
+	)}
+</section>
+
+<style>
+	.note {
+		display: block;
+		margin-top: 0.15rem;
+		color: var(--pico-muted-color);
+	}
+
+	.mods details {
+		margin: 0.15rem 0 0;
+	}
+
+	.mods summary {
+		color: var(--pico-muted-color);
+	}
+
+	/* An inline, comma-separated list; the commas are CSS so no markup
+	   whitespace can land before them. */
+	.needed {
+		display: inline;
+		margin: 0;
+		padding: 0;
+	}
+
+	.needed li {
+		display: inline;
+		margin: 0;
+		list-style: none;
+		text-decoration: underline dotted;
+	}
+
+	.needed li:not(:last-child)::after {
+		content: ", ";
+		display: inline-block;
+		white-space: pre;
+	}
+
+	.unknown {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin: 0.25rem 0 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.unknown li {
+		margin: 0;
+		list-style: none;
+	}
+</style>

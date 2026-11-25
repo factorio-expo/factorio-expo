@@ -1,0 +1,194 @@
+---
+import Page from "@layouts/Page.astro";
+import { xpRuleTables } from "@lib/achievements";
+import type { XPRules } from "@lib/api";
+import { getServerApiClient } from "@lib/api/server";
+import { LEGAL } from "@lib/legal-env";
+
+// The XP and badge tables come from GET /api/v1/xp-rules: the constants the
+// code awards with, so this page never drifts from them. Without the API the
+// section says so instead of guessing.
+let rules: XPRules | undefined;
+try {
+	rules = await getServerApiClient(Astro).site.xpRules();
+} catch (err) {
+	console.error("about: xp rules failed", err);
+}
+const tables = rules ? xpRuleTables(rules) : undefined;
+---
+
+<Page
+	title="About"
+	nav="about"
+	description="What Factorio Expo is: anonymous blueprint and book hosting with rendered previews, production-rate analysis and quality-aware search."
+>
+	<h1>About Factorio Expo</h1>
+	<p>
+		Factorio Expo hosts Factorio blueprints and blueprint books. Paste an exchange string and
+		you get a public page with an in-game preview image, a breakdown of what is inside
+		(entities, recipes, power, production rates, space platform stats) and a place in the
+		search.
+	</p>
+
+	<h2>How it works</h2>
+	<ul>
+		<li>
+			<strong>No account needed.</strong> Upload anonymously and keep the edit link; it is the
+			only way to change that entry later. An account adds favorites, collections, private
+			entries and ownership.
+		</li>
+		<li>
+			<strong>Real Factorio.</strong> Previews and numbers come from a headless Factorio
+			server and a graphical client running the current game version with Space Age, not from
+			an approximation.
+		</li>
+		<li>
+			<strong>Books are unpacked.</strong> Every blueprint inside a book gets its own page,
+			preview and analysis.
+		</li>
+		<li>
+			<strong>Your string is kept as uploaded.</strong> Every revision is immutable, so older
+			versions stay available.
+		</li>
+	</ul>
+
+	<h2>Search</h2>
+	<p>
+		Find blueprints by text, tags, entities, recipes, quality, production rates or space
+		platform metrics. Filters work on the analysed contents of a blueprint, not on its title.
+	</p>
+
+	<h2 id="xp-and-badges">XP, levels and badges</h2>
+	<p>
+		Signed-in uploaders earn XP for what they share and how others use it. XP sets your level
+		and badges on your profile; it never changes where anything shows up in search or on the
+		<a href="/leaderboard">leaderboard</a>, and there is no ranking of users. Points come from
+		content that still exists: when an entry or comment is removed, its points stop counting.
+		Records and challenge places keep their badges for good.
+	</p>
+	{tables ? (
+		<div data-xp-rules>
+			<h3 id="xp">Earning XP</h3>
+			<table class="rules">
+				<thead>
+					<tr>
+						<th scope="col">What</th>
+						<th scope="col">XP</th>
+						<th scope="col">Limit</th>
+					</tr>
+				</thead>
+				<tbody>
+					{tables.awards.map((row) => (
+						<tr data-xp-reason={row.key}>
+							<td>{row.label}</td>
+							<td class="number">{row.value}</td>
+							<td>{row.note}</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+			<p>
+				Each upload, favorite, collection add and comment counts once: favoriting the same
+				entry again, or your own entries, earns nothing. A record pays once per board and
+				entry. Daily limits start over at midnight UTC ({rules?.daily_cap_reset}).
+			</p>
+			<h3 id="levels">Levels</h3>
+			<table class="rules levels">
+				<thead>
+					<tr>
+						<th scope="col">Level</th>
+						<th scope="col">From</th>
+					</tr>
+				</thead>
+				<tbody>
+					{tables.levels.map((row) => (
+						<tr data-level={row.key}>
+							<td>{row.label}</td>
+							<td class="number">{row.value}</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+			<h3 id="badges">Badges</h3>
+			<table class="rules">
+				<thead>
+					<tr>
+						<th scope="col">Badge</th>
+						<th scope="col">How to earn it</th>
+					</tr>
+				</thead>
+				<tbody>
+					{tables.badges.map((row) => (
+						<tr data-badge-rule={row.key}>
+							<td>{row.label}</td>
+							<td>{row.note}</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+	) : (
+		<p>The XP table could not be loaded just now; please try again later.</p>
+	)}
+
+	<h2 id="developers">For developers</h2>
+	<p>
+		The read side of the API is public and documented: search, entries, blueprints with their
+		analysis, raw exchange strings and preview images. Browse the{" "}
+		<a href="/developers/api">API docs</a> or take the{" "}
+		<a href="/openapi.json">OpenAPI document</a> for your own tooling. Please cache and keep
+		requests modest; reads are rate limited.
+	</p>
+
+	<h2 id="unofficial">Unofficial and free</h2>
+	<p>
+		Factorio Expo is a fan project. It is not affiliated with or endorsed by Wube Software, the
+		makers of Factorio; Factorio is their trademark. The previews, icons and game data on this
+		site come from the game itself and belong to Wube Software. Wube has approved this as long
+		as the site is free and non-commercial, and it will stay that way.
+	</p>
+
+	<h2 id="contact">Contact</h2>
+	<p>
+		Questions, takedown requests, abuse and security reports:{" "}
+		<a href={`mailto:${LEGAL.email}`}>{LEGAL.email}</a>. To report a single entry or comment,
+		its flag button is quicker; for a bug, a wrong preview or a broken page, use the bug button
+		at the top of every page. The rules are in the <a href="/terms-of-use">terms of use</a>.
+	</p>
+</Page>
+
+<style>
+	.rules {
+		width: auto;
+		min-width: min(100%, 24rem);
+		max-width: 100%;
+		border-collapse: separate;
+		border-spacing: 0;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+		overflow: hidden;
+	}
+	.rules th {
+		background: var(--pico-card-background-color);
+		border-bottom: 2px solid var(--pico-muted-border-color);
+		font-size: 0.85rem;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+	}
+	.rules td {
+		border-bottom: 1px solid var(--pico-muted-border-color);
+	}
+	.rules tbody tr:last-child td {
+		border-bottom: 0;
+	}
+	.rules tbody tr:nth-child(even) td {
+		background: color-mix(in srgb, var(--pico-muted-border-color) 35%, transparent);
+	}
+	.rules .number {
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.levels td:last-child {
+		text-align: right;
+	}
+</style>

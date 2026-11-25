@@ -1,0 +1,519 @@
+---
+// Preview thumbnail (the lossy WebP thumbnail, never upscaled, at most 40rem
+// tall) centred in a tinted frame that fills the hero column, so wide and tall
+// builds both sit in the same box. Clicking it opens a modal with the full-size
+// lossless image in the zoom and pan viewer (viewer/PreviewViewer.svelte: the
+// revision timeline and the author's notes too), its details and open/download
+// buttons. The modal requests the full image only when opened, and the viewer
+// is loaded then. A full image the storage budget evicted is rendered again
+// on open, followed on the entry's event stream like an upload (live-leaf.ts):
+// the modal shows the thumbnail until the fresh preview is swapped in.
+import { assetUrl } from "@lib/api/public-asset";
+import Download from "@lucide/astro/icons/download";
+import ExternalLink from "@lucide/astro/icons/external-link";
+import FailureNote from "@components/common/FailureNote.astro";
+import ModalDialog from "@components/common/ModalDialog.astro";
+import { type LeafDetail } from "@lib/api";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+
+interface Props {
+	leaf: LeafDetail;
+	/** The entry the leaf belongs to (its notes and revision timeline). */
+	entryId: string;
+}
+
+const { leaf, entryId } = Astro.props;
+const preview = leaf.preview;
+const fullSrc = preview ? assetUrl(preview.url) : "";
+const thumbnailSrc = preview ? assetUrl(preview.thumbnail_url) : "";
+const extension = preview?.media_type.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "png";
+const dialogId = `preview-dialog-${leaf.id}`;
+const alt = stripRichText(leaf.label) || "Blueprint preview";
+---
+
+<div class="preview-box">
+	{preview && <p class="hint">Click the preview to zoom and see notes.</p>}
+	<div
+		class="preview"
+		data-preview
+		data-entry-id={entryId}
+		data-blueprint-id={leaf.id}
+		data-revision-id={leaf.revision.id}
+		data-full-available={preview ? String(preview.full_available) : undefined}
+	>
+		{preview ? (
+			<>
+				<button
+					type="button"
+					class="thumb"
+					data-open-preview
+					aria-haspopup="dialog"
+					aria-label="Open full-size preview"
+					title="Open full-size preview"
+				>
+					<img
+						src={thumbnailSrc}
+						width={preview.thumbnail_width}
+						height={preview.thumbnail_height}
+						alt={alt}
+						fetchpriority="high"
+					/>
+					<span class="pins" data-thumb-pins aria-hidden="true"></span>
+				</button>
+				<ModalDialog
+					titleId={dialogId}
+					title="Preview"
+					closeLabel="Close preview"
+					width="64rem"
+					maximizable
+				>
+					<div
+						class="full"
+						data-preview-viewer
+						data-src={fullSrc}
+						data-thumbnail-src={thumbnailSrc}
+					></div>
+					<!-- The viewer moves this between its timeline and its notes. -->
+					<div class="details" data-preview-details>
+						<p class="full-status" data-full-status role="status" hidden></p>
+						<dl class="facts">
+							<div>
+								<dt>Dimensions</dt>
+								<dd data-preview-dims>
+									{preview.width} × {preview.height} px
+								</dd>
+							</div>
+							<div>
+								<dt>Type</dt>
+								<dd>{preview.media_type}</dd>
+							</div>
+							<div>
+								<dt>File size</dt>
+								<dd data-preview-size>…</dd>
+							</div>
+						</dl>
+						<div class="buttons" data-full-buttons>
+							<a
+								role="button"
+								class="outline secondary"
+								href={fullSrc}
+								target="_blank"
+								rel="noopener"
+							>
+								<ExternalLink aria-hidden="true" />
+								Open in new tab
+							</a>
+							<a
+								role="button"
+								href={fullSrc}
+								download={`preview-${leaf.id.slice(0, 8)}.${extension}`}
+							>
+								<Download aria-hidden="true" />
+								Download
+							</a>
+						</div>
+					</div>
+				</ModalDialog>
+			</>
+		) : leaf.preview_status === "failed" ? (
+			<FailureNote title="Preview could not be generated." code={leaf.preview_failure_code} />
+		) : (
+			<p aria-busy="true">Preview is rendering...</p>
+		)}
+	</div>
+</div>
+
+<script>
+	import { type BlueprintNote, type HistoryStep } from "@lib/api";
+	import { browserApi } from "@lib/browser-action";
+	import { bindDialog } from "@lib/dialog";
+	import { onLiveRegions } from "@lib/live-regions";
+	import { explainApiError } from "@lib/api-errors";
+	import { LEAF_REQUEUED } from "./live-leaf";
+
+	const loadCode = () => Promise.all([import("svelte"), import("./viewer/PreviewViewer.svelte")]);
+
+	/** Leaves whose modal was open, waiting for a re-render, when live-leaf
+	 * swapped in the fresh preview: the new markup opens it again. */
+	const reopen = new Set<string>();
+
+	function formatBytes(bytes: number) {
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+		return `${(bytes / 1024 / 1024).toFixed(2)} MiB`;
+	}
+
+	function showSize(target: HTMLElement, bytes: number) {
+		target.textContent = bytes > 0 ? formatBytes(bytes) : "—";
+	}
+
+	onLiveRegions((scope) => {
+		for (const root of scope.querySelectorAll<HTMLElement>("[data-preview]")) bindPreview(root);
+	});
+
+	function bindPreview(root: HTMLElement) {
+		const opener = root.querySelector<HTMLButtonElement>("[data-open-preview]");
+		const dialog = root.querySelector<HTMLDialogElement>("dialog");
+		const stage = root.querySelector<HTMLElement>("[data-preview-viewer]");
+		const details = root.querySelector<HTMLElement>("[data-preview-details]");
+		const size = root.querySelector<HTMLElement>("[data-preview-size]");
+		const dims = root.querySelector<HTMLElement>("[data-preview-dims]");
+		const status = root.querySelector<HTMLElement>("[data-full-status]");
+		const buttons = root.querySelector<HTMLElement>("[data-full-buttons]");
+		const links = buttons?.querySelectorAll<HTMLAnchorElement>("a");
+		const pins = root.querySelector<HTMLElement>("[data-thumb-pins]");
+		if (
+			!opener ||
+			!dialog ||
+			!stage ||
+			!details ||
+			!pins ||
+			!size ||
+			!dims ||
+			!status ||
+			!buttons ||
+			!links
+		)
+			return;
+		const blueprintId = root.dataset.blueprintId!;
+		const fullSrc = stage.dataset.src!;
+		const thumbnailSrc = stage.dataset.thumbnailSrc!;
+		const ownDims = dims.textContent ?? "";
+		const downloadName = links[1]?.getAttribute("download") ?? "";
+		let viewer: { setSource(src: string): void } | undefined;
+		let viewerLoading: Promise<void> | undefined;
+
+		// The notes as numbered markers over the thumbnail.
+		const showPins = (notes: Pick<BlueprintNote, "x" | "y" | "number">[]) => {
+			pins.replaceChildren(
+				...notes.map((note) => {
+					const pin = document.createElement("span");
+					pin.className = "pin";
+					pin.style.left = `${note.x * 100}%`;
+					pin.style.top = `${note.y * 100}%`;
+					pin.textContent = String(note.number);
+					return pin;
+				}),
+			);
+		};
+		// One fetch serves the thumbnail's pins and the viewer's first notes.
+		const firstNotes = browserApi().entries.listNotes(root.dataset.entryId!, blueprintId);
+		firstNotes.then((list) => showPins(list.notes)).catch(() => undefined);
+
+		// The viewer (zoom, pan, timeline, notes) is loaded on the first open.
+		// The code is fetched as soon as the thumbnail is hovered, focused or touched.
+		for (const type of ["pointerenter", "focus", "touchstart"])
+			opener.addEventListener(type, () => void loadCode(), { once: true, passive: true });
+		const loadViewer = () =>
+			(viewerLoading ??= (async () => {
+				const [{ mount }, { default: PreviewViewer }] = await loadCode();
+				viewer = mount(PreviewViewer, {
+					target: stage,
+					props: {
+						entryId: root.dataset.entryId!,
+						blueprintId,
+						revisionId: root.dataset.revisionId!,
+						details,
+						onnotes: showPins,
+						firstNotes,
+						onimageerror: () => {
+							// Evicted after the page was rendered: the full URL answers 404.
+							if (state === "shown" && !rendered) void render();
+						},
+						onstep: showStep,
+					},
+				});
+			})());
+		// Always the latest source, whenever the viewer is ready.
+		let source = "";
+		const show = (src: string) => {
+			source = src;
+			void loadViewer().then(() => viewer?.setSource(source));
+		};
+
+		// The facts and the open/download links describe the revision on show.
+		const showStep = (step: HistoryStep | null) => {
+			const own = step === null;
+			const preview = step?.preview;
+			dims.textContent = own
+				? ownDims
+				: preview
+					? `${preview.width} × ${preview.height} px`
+					: "—";
+			const full = own ? fullSrc : preview ? assetUrl(preview.url) : "";
+			showFileSize(full);
+			for (const link of links) link.hidden = !full;
+			for (const link of links) if (full) link.href = full;
+			if (downloadName && full) {
+				const revision = own ? "" : `-r${step.version_number}`;
+				links[1]?.setAttribute(
+					"download",
+					downloadName.replace(/(\.[a-z0-9]+)$/, `${revision}$1`),
+				);
+			}
+		};
+
+		// The size is only known from the response (cross-origin responses may hide it): a dash when unknown.
+		const showFileSize = (src: string) => {
+			if (!src) return showSize(size, 0);
+			fetch(src, { method: "HEAD" })
+				.then((response) => showSize(size, Number(response.headers.get("content-length"))))
+				.catch(() => showSize(size, 0));
+		};
+		// idle: not loaded yet; shown: the full image is loading or loaded.
+		let state: "idle" | "shown" | "rendering" | "failed" = "idle";
+		// A re-render was asked for: never ask again from this markup.
+		let rendered = reopen.delete(blueprintId);
+
+		const showStatus = (text: string, busy: boolean) => {
+			status.textContent = text;
+			status.toggleAttribute("aria-busy", busy);
+			status.hidden = false;
+			buttons.hidden = true;
+		};
+
+		const showFull = () => {
+			state = "shown";
+			status.hidden = true;
+			buttons.hidden = false;
+			show(fullSrc);
+			showFileSize(fullSrc);
+		};
+
+		const fail = (text = "The full-size preview could not be rendered.") => {
+			state = "failed";
+			show(thumbnailSrc);
+			showStatus(text, false);
+		};
+
+		// The full file was evicted: show the thumbnail and queue a re-render,
+		// then follow it like an upload: live-leaf watches the entry's event
+		// stream and swaps in the fresh preview, which reopens this modal.
+		const render = async () => {
+			state = "rendering";
+			rendered = true;
+			show(thumbnailSrc);
+			showStatus("Rendering the full-size preview...", true);
+			reopen.add(blueprintId);
+			try {
+				const result = await browserApi().blueprints.requestPreviewRender(blueprintId);
+				if (result.full_available) {
+					reopen.delete(blueprintId);
+					return showFull();
+				}
+				if (result.status !== "pending") throw new Error("re-render failed");
+				root.dispatchEvent(
+					new CustomEvent(LEAF_REQUEUED, { bubbles: true, detail: "preview" }),
+				);
+			} catch (err) {
+				reopen.delete(blueprintId);
+				// The visitor's own render queue cap (the render is theirs).
+				fail(explainApiError(err));
+			}
+		};
+
+		dialog.addEventListener("close", () => {
+			if (state === "rendering") reopen.delete(blueprintId);
+		});
+
+		bindDialog({
+			dialog,
+			opener,
+			onOpen: () => {
+				if (state === "rendering") reopen.add(blueprintId);
+				if (state !== "idle") return;
+				if (root.dataset.fullAvailable !== "false") showFull();
+				else if (rendered) fail();
+				else void render();
+			},
+		});
+		if (rendered) opener.click();
+	}
+</script>
+
+<style>
+	/* The hint overlays the frame's top padding, so the frame keeps the
+	   hero row's height (level with the details panel). */
+	.preview-box {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.preview {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 16rem;
+		overflow-x: auto;
+		margin: 0;
+		padding: 2rem 0.75rem 0.75rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-card-sectioning-background-color);
+	}
+
+	.preview :global(p) {
+		margin: 0.5rem 0;
+	}
+
+	.hint {
+		position: absolute;
+		z-index: 1;
+		top: 0.5rem;
+		left: 0.75rem;
+		right: 0.75rem;
+		margin: 0;
+		color: var(--pico-muted-color);
+		font-size: 0.8rem;
+	}
+
+	.thumb {
+		display: block;
+		width: auto;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: none;
+		cursor: zoom-in;
+	}
+
+	.thumb {
+		position: relative;
+	}
+
+	/* The author's notes over the thumbnail (same proportions as the full image). */
+	.pins {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+	}
+
+	.pins :global(.pin) {
+		position: absolute;
+		display: grid;
+		place-items: center;
+		width: 1.25rem;
+		height: 1.25rem;
+		translate: -50% -50%;
+		border: 2px solid #fff;
+		border-radius: 50%;
+		background: var(--pico-primary-background);
+		color: var(--pico-primary-inverse);
+		font-size: 0.65rem;
+		font-weight: 700;
+		line-height: 1;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 55%);
+	}
+
+	.thumb img {
+		display: block;
+		width: auto;
+		height: auto;
+		max-width: 100%;
+		max-height: 40rem;
+		object-fit: contain;
+	}
+
+	/* The viewer's room until it mounts: its toolbar and stage, shimmering, so
+	   hydrating it moves nothing below. */
+	.full:empty {
+		min-height: calc(2.75rem + 0.75rem + min(60vh, 40rem));
+		border-radius: var(--pico-border-radius);
+		background: linear-gradient(
+			100deg,
+			transparent 30%,
+			var(--pico-muted-border-color) 50%,
+			transparent 70%
+		);
+		background-size: 200% 100%;
+		animation: shimmer 1.4s linear infinite;
+	}
+
+	:global(dialog[data-maximized]) .full:empty {
+		min-height: calc(2.75rem + 0.75rem + max(20rem, calc(100dvh - 14rem)));
+	}
+
+	@keyframes shimmer {
+		to {
+			background-position: -200% 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.full:empty {
+			animation: none;
+		}
+	}
+
+	/* Facts on the left, the open and download buttons on the right. */
+	.details {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem 1.5rem;
+		padding: 0.6rem 0.75rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+	}
+
+	.full-status {
+		flex: 1 0 100%;
+		margin: 0;
+		text-align: center;
+		color: var(--pico-muted-color);
+	}
+
+	.full-status[hidden] {
+		display: none;
+	}
+
+	.facts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 1.5rem;
+		margin: 0;
+		font-size: 0.9rem;
+	}
+
+	.facts > div {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.facts dt {
+		color: var(--pico-muted-color);
+	}
+
+	.facts dd {
+		margin: 0;
+	}
+
+	.buttons {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.buttons a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		width: auto;
+		margin: 0;
+		padding: 0.4rem 0.8rem;
+		font-size: 0.9rem;
+	}
+
+	.buttons[hidden] {
+		display: none;
+	}
+
+	.buttons :global(svg) {
+		width: 1.15rem;
+		height: 1.15rem;
+	}
+</style>

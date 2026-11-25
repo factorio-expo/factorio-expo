@@ -1,0 +1,206 @@
+---
+// Home picks: the blueprints shown on the public home page, at most six, each
+// with an optional one-line caption saying why. A pick whose blueprint left
+// the current revision of a public entry is hidden on the site until removed.
+import Outcome from "@components/Outcome.astro";
+import Console from "@layouts/Console.astro";
+import { FormError, handlePost } from "@lib/api/actions";
+import { loadFromApi } from "@lib/api/page";
+import { formText } from "@lib/forms";
+import { pickedBlueprintId } from "@lib/home-picks";
+import { sitePageUrl } from "@lib/site";
+import RichText from "@factorio-expo/ui/game/RichText.astro";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+
+const MAX_PICKS = 6;
+const MAX_CAPTION = 140;
+
+const posted = await handlePost(Astro, async (api, form) => {
+	switch (formText(form, "action")) {
+		case "add": {
+			const blueprintId = pickedBlueprintId(formText(form, "blueprint"));
+			if (!blueprintId) {
+				throw new FormError("Paste a blueprint page link (/e/…/b/…) or a blueprint id.");
+			}
+			await api.addHomePick(blueprintId, formText(form, "caption"));
+			return "Picked for the home page.";
+		}
+		case "caption":
+			await api.setHomePickCaption(formText(form, "blueprint"), formText(form, "caption"));
+			return "Caption saved.";
+		case "remove":
+			await api.removeHomePick(formText(form, "blueprint"));
+			return "Pick removed.";
+		default:
+			throw new FormError("Unknown action.");
+	}
+});
+if (posted) return posted;
+
+const loaded = await loadFromApi(Astro, (api) => api.homePicks());
+const picks = loaded.data;
+const full = (picks?.length ?? 0) >= MAX_PICKS;
+---
+
+<Console
+	title="Home picks"
+	nav="home-picks"
+	description="Blueprints shown on the home page, newest first, with why they were picked."
+>
+	<Outcome loadError={loaded.error} />
+
+	<section class="panel" aria-labelledby="add-pick">
+		<div class="panel-head">
+			<h2 id="add-pick">Pick a blueprint</h2>
+			<small class="muted">
+				{picks?.length ?? 0} of {MAX_PICKS}
+			</small>
+		</div>
+		<form method="post" class="actions">
+			<input type="hidden" name="action" value="add" />
+			<input
+				type="text"
+				name="blueprint"
+				placeholder="Blueprint page link or id"
+				aria-label="Blueprint page link or id"
+				required
+				disabled={full}
+			/>
+			<input
+				type="text"
+				name="caption"
+				placeholder="Why (optional, one line)"
+				aria-label="Caption"
+				maxlength={MAX_CAPTION}
+				disabled={full}
+			/>
+			<button type="submit" disabled={full}>
+				Pick
+			</button>
+		</form>
+		<small class="muted">
+			{full
+				? `The home page holds ${MAX_PICKS} picks: remove one first.`
+				: "A blueprint of the current revision of a public entry. Open it on the site and paste its link."}
+		</small>
+	</section>
+
+	{picks && picks.length === 0 && (
+		<p class="empty">No picks: the home page leaves the section out.</p>
+	)}
+	{picks && picks.length > 0 && (
+		<div class="table-wrap">
+			<table class="data">
+				<thead>
+					<tr>
+						<th scope="col">Blueprint</th>
+						<th scope="col">Caption</th>
+						<th scope="col">Picked</th>
+						<th scope="col" aria-label="Actions" />
+					</tr>
+				</thead>
+				<tbody>
+					{picks.map((pick) => {
+						const siteUrl = sitePageUrl(`/e/${pick.entry_id}/b/${pick.blueprint_id}`);
+						return (
+							<tr data-pick={pick.blueprint_id}>
+								<td>
+									{siteUrl ? (
+										<a href={siteUrl} target="_blank" rel="noopener">
+											<RichText text={pick.label || pick.entry_title} />
+										</a>
+									) : (
+										<RichText text={pick.label || pick.entry_title} />
+									)}
+									<br />
+									<small>
+										in{" "}
+										<a href={`/entries/${pick.entry_id}`}>
+											<RichText text={pick.entry_title} />
+										</a>
+									</small>
+									{!pick.shown && (
+										<>
+											{" "}
+											<span
+												class="pill"
+												data-tone="warn"
+												title="The blueprint is no longer in the current revision of a public entry"
+											>
+												hidden
+											</span>
+										</>
+									)}
+								</td>
+								<td>
+									<form method="post" class="caption">
+										<input type="hidden" name="action" value="caption" />
+										<input
+											type="hidden"
+											name="blueprint"
+											value={pick.blueprint_id}
+										/>
+										<input
+											type="text"
+											name="caption"
+											value={pick.caption}
+											aria-label="Caption"
+											maxlength={MAX_CAPTION}
+										/>
+										<button type="submit" class="secondary">
+											Save
+										</button>
+									</form>
+								</td>
+								<td class="nowrap">
+									{isoDateTime(pick.picked_at)}
+									<br />
+									<small>by {pick.picked_by}</small>
+								</td>
+								<td>
+									<form method="post">
+										<input
+											type="hidden"
+											name="blueprint"
+											value={pick.blueprint_id}
+										/>
+										<button
+											type="submit"
+											name="action"
+											value="remove"
+											class="secondary"
+											data-confirm="Remove this pick from the home page?"
+										>
+											Remove
+										</button>
+									</form>
+								</td>
+							</tr>
+						);
+					})}
+				</tbody>
+			</table>
+		</div>
+	)}
+</Console>
+
+<style>
+	.nowrap {
+		white-space: nowrap;
+	}
+	td form {
+		margin: 0;
+	}
+	td form button {
+		margin: 0;
+		padding: 0.25rem 0.7rem;
+	}
+	form.caption {
+		display: flex;
+		gap: 0.4rem;
+		min-width: 14rem;
+	}
+	form.caption input {
+		margin: 0;
+	}
+</style>

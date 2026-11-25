@@ -1,0 +1,150 @@
+# End-to-end test stack: layered over the root docker-compose.yaml as its own
+# project (factorio-expo-e2e), so it never touches the dev stack's containers,
+# volumes or ports. Run through the scripts in e2e/package.json:
+#
+#   docker compose -p factorio-expo-e2e --env-file e2e/e2e.env \
+#     -f docker-compose.yaml -f e2e/compose.yaml up -d --build --wait
+#
+# Differences from the dev/prod stack, all deliberate:
+# - No Factorio: the server, client and downloader never start (they need a
+#   Factorio account and minutes of CPU per render). The render worker still
+#   runs and queues jobs, so previews stay "rendering" during a test run.
+# - Postgres, Typesense and the API's file storage keep their data in tmpfs:
+#   every new stack starts with an empty, freshly migrated database that tests
+#   may change freely, and no host directory is written.
+# - Rate limits and Turnstile are off (one IP registers dozens of users per
+#   run, with no human check) and the search projection polls every second so
+#   new entries are searchable fast.
+# - Imports ("Import from link") go to a stand-in server, expo-import-stub,
+#   instead of pastebin and the like; the API refuses that setting next to
+#   Secure cookies, so session cookies are plain (API_COOKIE_SECURE=false).
+# - Web and API listen on their own loopback ports (default 3100 / 8180).
+
+services:
+  factorio-downloader:
+    profiles: ["factorio"]
+    container_name: factorio-expo-e2e-factorio-downloader
+  factorio-server:
+    profiles: ["factorio"]
+    container_name: factorio-expo-e2e-factorio-server
+    ports: !reset []
+  factorio-client:
+    profiles: ["factorio"]
+    container_name: factorio-expo-e2e-factorio-client
+
+  expo-render-worker:
+    container_name: factorio-expo-e2e-render-worker
+    depends_on: !override
+      expo-db-setup:
+        condition: service_completed_successfully
+    healthcheck:
+      interval: 2s
+
+  expo-postgres:
+    container_name: factorio-expo-e2e-postgres
+    ports: !reset []
+    volumes: !reset []
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      interval: 2s
+      start_period: 30s
+
+  expo-db-setup:
+    container_name: factorio-expo-e2e-db-setup
+    # The base file names this image explicitly; keep the dev stack's tag untouched.
+    image: factorio-expo-e2e-db
+
+  expo-typesense:
+    container_name: factorio-expo-e2e-typesense
+    volumes: !reset []
+    tmpfs:
+      - /data
+    healthcheck:
+      interval: 2s
+      start_period: 30s
+
+  expo-storage-init:
+    container_name: factorio-expo-e2e-storage-init
+    volumes: !reset []
+
+  # Stand-in for pastebin, GitHub and the other import sites: the specs
+  # register what each answers (import-stub/server.mjs); no real internet.
+  expo-import-stub:
+    image: node:26.13.0-trixie-slim
+    container_name: factorio-expo-e2e-import-stub
+    command: ["node", "/stub/server.mjs"]
+    environment:
+      PORT: "8190"
+    volumes:
+      - ./e2e/import-stub:/stub:ro
+    ports:
+      - "127.0.0.1:${E2E_IMPORT_STUB_PORT:-8190}:8190"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8190/healthz').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    networks:
+      - expo-network
+
+  expo-api:
+    container_name: factorio-expo-e2e-api
+    depends_on:
+      expo-import-stub:
+        condition: service_healthy
+    volumes: !reset []
+    tmpfs:
+      - /var/lib/expo/storage:uid=65532,gid=65532,mode=0755
+      - /var/lib/expo/ledger:uid=65532,gid=65532,mode=0750
+    environment:
+      API_ALLOWED_ORIGIN: "http://localhost:${E2E_WEB_PORT:-3100}"
+      API_PUBLIC_URL: "http://localhost:${E2E_API_PORT:-8180}"
+      # Passkeys only: no sign-in provider is configured (docs/e2e.md).
+      API_GITHUB_CLIENT_ID: ""
+      API_GITHUB_CLIENT_SECRET: ""
+      API_DISCORD_CLIENT_ID: ""
+      API_DISCORD_CLIENT_SECRET: ""
+      API_STEAM_API_KEY: ""
+      API_GOOGLE_CLIENT_ID: ""
+      API_GOOGLE_CLIENT_SECRET: ""
+      # No Turnstile on sign-up (docs/e2e.md).
+      API_TURNSTILE_SECRET_KEY: ""
+      API_RATE_LIMIT: "false"
+      # Imports fetch from the stand-in server, not the real sites, and may
+      # reach it on the stack's private network (docs/e2e.md).
+      API_IMPORT_STUB_ORIGIN: "http://expo-import-stub:8190"
+      # The stub origin is refused next to Secure cookies (the production
+      # setting), so this stack serves plain cookies over http://localhost.
+      API_COOKIE_SECURE: "false"
+      # Without Factorio no render finishes, so the suite's uploads pile up:
+      # a dispatch window and caps no run reaches keep every leaf sent to the
+      # worker (live-progress needs its refusal) and every upload accepted.
+      API_RENDER_WINDOW: "100000"
+      API_RENDER_CAP_ANONYMOUS: "100000"
+      API_RENDER_CAP_SIGNED_IN: "100000"
+      # The specs change analyses and verdicts straight in the database and
+      # reload at once, so no challenge board may be reused.
+      API_CHALLENGE_SCORES_TTL: "0s"
+      API_SEARCH_POLL_INTERVAL: "1s"
+      API_PREVIEW_POLL_INTERVAL: "1s"
+      API_VIEW_FLUSH_INTERVAL: "1s"
+      API_SEARCH_VIEW_INTERVAL: "1s"
+      # tmpfs reports little free space: never evict previews mid-run.
+      API_STORAGE_MIN_FREE_BYTES: "0"
+    ports: !override
+      - "127.0.0.1:${E2E_API_PORT:-8180}:8080"
+
+  expo-web:
+    container_name: factorio-expo-e2e-web
+    build:
+      args:
+        PUBLIC_SITE_URL: "https://example.org"
+        PUBLIC_API_BASE_URL: "http://localhost:${E2E_API_PORT:-8180}"
+        PUBLIC_TURNSTILE_SITE_KEY: ""
+        # Only the contact address: the other legal fields keep their placeholders.
+        PUBLIC_LEGAL: '{"email":"contact@e2e.test"}'
+    environment:
+      PUBLIC_API_BASE_URL: "http://localhost:${E2E_API_PORT:-8180}"
+    ports: !override
+      - "127.0.0.1:${E2E_WEB_PORT:-3100}:4321"

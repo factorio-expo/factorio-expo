@@ -1,0 +1,53 @@
+---
+// Lost your login: the username and the recovery code shown at sign-up sign
+// the account in. Behaviour in recover.ts; the new code is shown on
+// /recovery-code.
+---
+
+<form data-recover novalidate>
+	<fieldset data-recover-fields>
+		<label for="recover-username">Username</label>
+		<input
+			id="recover-username"
+			name="username"
+			autocomplete="username"
+			autocapitalize="none"
+			spellcheck="false"
+			required
+			maxlength="32"
+		/>
+		<label for="recover-code">Recovery code</label>
+		<input
+			id="recover-code"
+			name="code"
+			autocomplete="off"
+			autocapitalize="characters"
+			spellcheck="false"
+			required
+			maxlength="40"
+			aria-describedby="recover-code-help"
+		/>
+		<small id="recover-code-help">
+			The 26 characters you were shown when you created the account, with or without the
+			dashes.
+		</small>
+		<button type="submit">Recover account</button>
+	</fieldset>
+	<p data-recover-status role="alert" aria-live="polite"></p>
+</form>
+
+<script>
+	import "./recover.ts";
+</script>
+
+<style>
+	form {
+		max-width: 26rem;
+	}
+	[data-recover-status]:empty {
+		margin: 0;
+	}
+	[data-recover-status] {
+		color: var(--pico-del-color);
+	}
+</style>

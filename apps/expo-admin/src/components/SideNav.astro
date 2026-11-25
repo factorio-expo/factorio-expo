@@ -1,0 +1,353 @@
+---
+// Console sidebar: groups by area, current page marked.
+import { ADMIN_LOGS_URL } from "astro:env/server";
+import Ban from "@lucide/astro/icons/ban";
+import Bug from "@lucide/astro/icons/bug";
+import CircleX from "@lucide/astro/icons/circle-x";
+import BrushCleaning from "@lucide/astro/icons/brush-cleaning";
+import ExternalLink from "@lucide/astro/icons/external-link";
+import Files from "@lucide/astro/icons/files";
+import Tags from "@lucide/astro/icons/tags";
+import Trophy from "@lucide/astro/icons/trophy";
+import UserLock from "@lucide/astro/icons/user-lock";
+import Flag from "@lucide/astro/icons/flag";
+import House from "@lucide/astro/icons/house";
+import LayoutDashboard from "@lucide/astro/icons/layout-dashboard";
+import Menu from "@lucide/astro/icons/menu";
+import Logs from "@lucide/astro/icons/logs";
+import MessageSquareWarning from "@lucide/astro/icons/message-square-exclamation-point";
+import ScrollText from "@lucide/astro/icons/scroll-text";
+import Settings from "@lucide/astro/icons/settings";
+import Users from "@lucide/astro/icons/users";
+
+import type { Badges } from "@lib/api/types";
+
+export type NavKey =
+	| "overview"
+	| "entry-reports"
+	| "comment-reports"
+	| "problem-reports"
+	| "bans"
+	| "entries"
+	| "challenges"
+	| "home-picks"
+	| "tags"
+	| "reserved-names"
+	| "users"
+	| "failed-jobs"
+	| "cleanups"
+	| "settings"
+	| "audit"
+	| "none";
+
+export interface Props {
+	active: NavKey;
+	/** Open report counts; undefined when they could not be read. */
+	badges?: Badges | undefined;
+}
+
+interface Item {
+	key?: NavKey;
+	href: string;
+	label: string;
+	icon: typeof Logs;
+	/** Opens another tool (Dozzle) in a new tab. */
+	external?: boolean;
+	/** A count shown after the label (open reports); hidden when 0. */
+	count?: number | undefined;
+}
+
+const { active, badges } = Astro.props;
+
+const groups: { label: string; items: Item[] }[] = [
+	{
+		label: "General",
+		items: [{ key: "overview", href: "/", label: "Overview", icon: LayoutDashboard }],
+	},
+	{
+		label: "Moderation",
+		items: [
+			{
+				key: "entry-reports",
+				href: "/reports/entries",
+				label: "Entry reports",
+				icon: Flag,
+				count: badges?.reported_entries,
+			},
+			{
+				key: "comment-reports",
+				href: "/reports/comments",
+				label: "Comment reports",
+				icon: MessageSquareWarning,
+				count: badges?.reported_comments,
+			},
+			{
+				key: "problem-reports",
+				href: "/reports/problems",
+				label: "Problem reports",
+				icon: Bug,
+				count: badges?.problem_reports,
+			},
+			{ key: "bans", href: "/bans", label: "Bans", icon: Ban },
+		],
+	},
+	{
+		label: "Content",
+		items: [
+			{ key: "entries", href: "/entries", label: "Entries", icon: Files },
+			{ key: "challenges", href: "/challenges", label: "Challenges", icon: Trophy },
+			{ key: "home-picks", href: "/home-picks", label: "Home picks", icon: House },
+			{ key: "tags", href: "/tags", label: "Tags", icon: Tags },
+			{
+				key: "reserved-names",
+				href: "/reserved-usernames",
+				label: "Reserved names",
+				icon: UserLock,
+			},
+		],
+	},
+];
+groups.push({
+	label: "Admin",
+	items: [
+		{ key: "users", href: "/users", label: "Users", icon: Users },
+		{
+			key: "failed-jobs",
+			href: "/jobs",
+			label: "Failed jobs",
+			icon: CircleX,
+			count: badges?.failed_jobs,
+		},
+		{ key: "cleanups", href: "/cleanups", label: "Cleanups", icon: BrushCleaning },
+		{ key: "settings", href: "/settings", label: "Settings", icon: Settings },
+		{ key: "audit", href: "/audit", label: "Audit log", icon: ScrollText },
+	],
+});
+if (ADMIN_LOGS_URL) {
+	groups.push({
+		label: "Monitoring",
+		items: [{ href: ADMIN_LOGS_URL, label: "Logs", icon: Logs, external: true }],
+	});
+}
+// Phones fold the links into a menu, named after the current page; open
+// reports show on it as one count.
+const current = groups.flatMap((group) => group.items).find((item) => item.key === active);
+const openCount = groups
+	.flatMap((group) => group.items)
+	.reduce((sum, item) => sum + (item.count ?? 0), 0);
+---
+
+<aside class="sidenav">
+	<details class="nav-menu">
+		<summary>
+			<Menu class="icon" aria-hidden="true" />
+			<span>{current?.label ?? "Menu"}</span>
+			{openCount > 0 && (
+				<span class="badge count" aria-label={`(${openCount} open)`}>
+					{openCount}
+				</span>
+			)}
+		</summary>
+		<nav aria-label="Sidebar">
+			{groups.map((group) => (
+				<section aria-labelledby={`nav-${group.label.toLowerCase()}`}>
+					<p class="group-label" id={`nav-${group.label.toLowerCase()}`}>
+						{group.label}
+					</p>
+					<ul>
+						{group.items.map((item) => (
+							<li>
+								<a
+									href={item.href}
+									aria-current={
+										item.key && item.key === active ? "page" : undefined
+									}
+									target={item.external ? "_blank" : undefined}
+									rel={item.external ? "noopener noreferrer" : undefined}
+								>
+									<item.icon class="icon" aria-hidden="true" />
+									{item.label}
+									{item.count ? (
+										<span
+											class="badge count"
+											aria-label={`(${item.count} open)`}
+										>
+											{item.count}
+										</span>
+									) : undefined}
+									{item.external && (
+										<ExternalLink
+											class="icon external"
+											aria-label="(new tab)"
+										/>
+									)}
+								</a>
+							</li>
+						))}
+					</ul>
+				</section>
+			))}
+		</nav>
+	</details>
+</aside>
+
+<style>
+	.sidenav {
+		position: sticky;
+		top: 6.5rem;
+	}
+	.sidenav nav {
+		display: block;
+		margin: 0;
+	}
+	section + section {
+		margin-top: 1rem;
+	}
+	.group-label {
+		margin: 0 0 0.25rem;
+		padding: 0 0.75rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		color: var(--pico-muted-color);
+	}
+	ul {
+		flex-direction: column;
+		align-items: stretch;
+		margin: 0;
+		padding: 0;
+		width: 100%;
+	}
+	li {
+		display: block;
+		margin: 0;
+		padding: 0;
+	}
+	a {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		margin: 0;
+		padding: 0.45rem 0.75rem;
+		border-radius: var(--pico-border-radius);
+		color: inherit;
+		text-decoration: none;
+	}
+	/* Yellow icon, plain text; the current page inverts both. */
+	a :global(.icon:not(.external)) {
+		flex: none;
+		color: var(--pico-primary);
+	}
+	a:hover {
+		background: var(--pico-secondary-background);
+		color: var(--pico-secondary-inverse);
+	}
+	a:hover :global(.icon),
+	a[aria-current="page"] :global(.icon) {
+		color: inherit;
+	}
+	a[aria-current="page"] {
+		background: var(--pico-primary-background);
+		color: var(--pico-primary-inverse);
+	}
+	.count {
+		margin-left: auto;
+	}
+	.external {
+		margin-left: auto;
+		opacity: 0.6;
+	}
+	/* Wider screens: the menu is always open and its toggle hidden. */
+	.nav-menu {
+		margin: 0;
+		border: none;
+	}
+	.nav-menu > summary {
+		display: none;
+	}
+	@media (min-width: 40.0625rem) {
+		.nav-menu::details-content {
+			content-visibility: visible;
+			display: block;
+		}
+	}
+	/* Phones: a folded menu named after the current page; opened, the links
+	   wrap in rows instead of a column. */
+	@media (max-width: 40rem) {
+		.sidenav {
+			position: static;
+		}
+		.nav-menu {
+			padding: 0;
+			border: 1px solid var(--pico-muted-border-color);
+			border-radius: var(--pico-border-radius);
+		}
+		.nav-menu > summary {
+			display: flex;
+			align-items: center;
+			gap: 0.6rem;
+			margin: 0;
+			padding: 0.6rem 0.75rem;
+			font-weight: 600;
+		}
+		.nav-menu > summary :global(.icon) {
+			color: var(--pico-primary);
+		}
+		.nav-menu > summary .count {
+			margin-left: 0;
+		}
+		.nav-menu > summary::-webkit-details-marker {
+			display: none;
+		}
+		.nav-menu > summary {
+			list-style: none;
+			cursor: pointer;
+		}
+		/* A chevron at the far end: down when folded, up when open. */
+		.nav-menu > summary::after {
+			content: "";
+			flex: none;
+			width: 0.5rem;
+			height: 0.5rem;
+			margin: 0 0.25rem 0.2rem auto;
+			border-right: 2px solid var(--pico-muted-color);
+			border-bottom: 2px solid var(--pico-muted-color);
+			transform: rotate(45deg);
+			transition: transform 0.15s;
+		}
+		.nav-menu[open] > summary::after {
+			margin-bottom: -0.2rem;
+			transform: rotate(-135deg);
+		}
+		.nav-menu[open] > summary {
+			margin-bottom: 0.25rem;
+			border-bottom: 1px solid var(--pico-muted-border-color);
+		}
+		.nav-menu nav {
+			padding: 0.25rem 0.5rem 0.6rem;
+		}
+		.sidenav nav {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.25rem;
+		}
+		section + section {
+			margin-top: 0;
+		}
+		.group-label {
+			display: none;
+		}
+		ul {
+			display: flex;
+			flex-direction: row;
+			flex-wrap: wrap;
+			gap: 0.25rem;
+			width: auto;
+		}
+		a {
+			padding: 0.3rem 0.6rem;
+			font-size: 0.9rem;
+		}
+	}
+</style>

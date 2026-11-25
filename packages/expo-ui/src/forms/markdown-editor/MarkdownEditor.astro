@@ -1,0 +1,57 @@
+---
+interface Props {
+	id: string;
+	name?: string;
+	value?: string;
+	maxlength?: number;
+	rows?: number;
+}
+const { id, name = "description", value = "", maxlength = 5000, rows = 6 } = Astro.props;
+---
+
+<div class="entry-markdown-editor">
+	<textarea
+		id={id}
+		name={name}
+		rows={rows}
+		maxlength={maxlength}
+		data-markdown-editor
+	>{value}</textarea>
+</div>
+
+<script>
+	import MarkdownEditor from "markdown-text-editor";
+
+	Array.from(
+		document.querySelectorAll<HTMLTextAreaElement>("[data-markdown-editor]"),
+		(textarea) =>
+			new MarkdownEditor(textarea, {
+				toolbar: ["bold", "italic", "heading", "link", "ul", "ol", "code", "preview"],
+			}),
+	);
+
+	// The editor copies the page theme once, when it is built; keep it in step
+	// with the theme toggle.
+	new MutationObserver(() => {
+		const theme = document.documentElement.dataset.theme;
+		if (!theme) return;
+		for (const editor of document.querySelectorAll(".markdown-editor-wrapper")) {
+			editor.setAttribute("data-theme", theme);
+		}
+	}).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>
+
+<style>
+	.entry-markdown-editor {
+		flex: 1;
+		min-width: 0;
+		/* The gap form inputs leave before the next field. */
+		margin-bottom: var(--pico-spacing);
+	}
+
+	/* The editor's own light text is a dark gray; make it black. */
+	:global(:root:not([data-theme="dark"])) .entry-markdown-editor :global(.editor-textarea),
+	:global(:root:not([data-theme="dark"])) .entry-markdown-editor :global(.preview-content) {
+		color: #000;
+	}
+</style>

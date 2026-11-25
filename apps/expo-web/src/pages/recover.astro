@@ -1,0 +1,23 @@
+---
+import RecoverForm from "@components/auth/RecoverForm.astro";
+import Page from "@layouts/Page.astro";
+import { redirectIfSignedIn } from "@lib/viewer";
+
+const signedIn = await redirectIfSignedIn(Astro, "/");
+if (signedIn) return signedIn;
+---
+
+<Page title="Recover your account" noindex>
+	<h1>Recover your account</h1>
+	<p>
+		Lost the login your account used? Enter your username and the recovery code shown when you
+		created it. You will get a new code, and can add a new way to log in.
+	</p>
+	<RecoverForm />
+	<p>
+		<small>
+			No recovery code? Accounts have no email, so there is nothing we can check against.
+			<a href="/login">Back to log in</a>.
+		</small>
+	</p>
+</Page>

@@ -1,0 +1,75 @@
+---
+// One section of the home page: a heading with an optional "see all" link, an
+// optional control (the trending period switch) and the content.
+import ArrowRight from "@lucide/astro/icons/arrow-right";
+
+interface Props {
+	title: string;
+	/** The section's own page, linked as "See all". */
+	href?: string;
+	hrefLabel?: string;
+	id: string;
+}
+const { title, href, hrefLabel = "See all", id } = Astro.props;
+---
+
+<section class="home-section" aria-labelledby={id}>
+	<header>
+		<h2 id={id}>{title}</h2>
+		<div class="controls">
+			<slot name="controls" />
+		</div>
+		{href && (
+			<a class="see-all" href={href}>
+				{hrefLabel}
+				<ArrowRight aria-hidden="true" />
+			</a>
+		)}
+	</header>
+	<slot />
+</section>
+
+<style>
+	.home-section {
+		margin-bottom: 2.5rem;
+	}
+	header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 1rem;
+		margin-bottom: 1rem;
+	}
+	h2 {
+		margin: 0;
+		font-size: 1.4rem;
+	}
+	.controls {
+		display: contents;
+	}
+	.see-all {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin-left: auto;
+		font-weight: 600;
+		text-decoration: none;
+	}
+	.see-all :global(svg) {
+		width: 1rem;
+		height: 1rem;
+		transition: transform 0.15s;
+	}
+	.see-all:hover :global(svg),
+	.see-all:focus-visible :global(svg) {
+		transform: translateX(3px);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.see-all :global(svg) {
+			transition: none;
+		}
+		.see-all:hover :global(svg) {
+			transform: none;
+		}
+	}
+</style>

@@ -1,0 +1,68 @@
+---
+import { sortOptions } from "@lib/search/query";
+
+interface Props {
+	selected: string;
+}
+
+const { selected } = Astro.props;
+---
+
+<div class="search-sort">
+	<label for="search-sort">Sort by</label>
+	<select id="search-sort" name="sort">
+		{sortOptions.map((option) => (
+			<option value={option.value} selected={selected === option.value}>
+				{option.label}
+			</option>
+		))}
+	</select>
+</div>
+
+<style>
+	.search-sort {
+		display: grid;
+		grid-template-columns: auto minmax(0, 20rem);
+		align-items: center;
+		justify-content: end;
+		gap: 1rem;
+		margin-bottom: 1rem;
+	}
+
+	.search-sort label,
+	.search-sort select {
+		margin: 0;
+	}
+
+	/* Phones: a compact pill sized to the chosen option, not a full-width field. */
+	@media (max-width: 575px) {
+		.search-sort {
+			display: inline-flex;
+			gap: 0.25rem;
+			padding: 0 0.25rem 0 0.85rem;
+			border: var(--pico-border-width) solid var(--pico-form-element-border-color);
+			border-radius: 999px;
+			background: var(--pico-form-element-background-color);
+			font-size: 0.875rem;
+		}
+
+		.search-sort label {
+			color: var(--pico-muted-color);
+		}
+
+		.search-sort label::after {
+			content: ":";
+		}
+
+		.search-sort select {
+			width: auto;
+			field-sizing: content;
+			height: auto;
+			padding: 0.35rem 2rem 0.35rem 0.25rem;
+			border: none;
+			background-color: transparent;
+			box-shadow: none;
+			font-size: inherit;
+		}
+	}
+</style>

@@ -1,0 +1,159 @@
+---
+// Entry header: title, description and tags (and, for an owned entry, its
+// visibility), edited together through one form (one pencil) for permitted
+// viewers (`canEdit`; behaviour in entry-metadata.ts). Facts and actions live
+// in EntryInfo.
+import BlueprintIcon from "@components/common/BlueprintIcon.astro";
+import EntryDetailsFields from "@components/entry-details/EntryDetailsFields.astro";
+import TagList from "@components/common/TagList.astro";
+import Pencil from "@lucide/astro/icons/pencil";
+import Save from "@lucide/astro/icons/save";
+import X from "@lucide/astro/icons/x";
+import type { Entry, TagGroup } from "@lib/api";
+import type { TagRef } from "@lib/tags";
+import { formatRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { renderMarkdown } from "@utils/markdown";
+
+interface Props {
+	entry: Entry;
+	/** entry.tags with their display names. */
+	tags: TagRef[];
+	/** The curated tags the editor can pick from. */
+	tagGroups: TagGroup[];
+	/** Decided by the server from the session or edit token. */
+	canEdit?: boolean;
+	/** Comments a visibility change away from public would delete. */
+	commentCount?: number;
+}
+const { entry, tags, tagGroups, canEdit = false, commentCount = 0 } = Astro.props;
+// An anonymous entry is always public; only its owner's entry can change.
+const visibilityEditable = Boolean(entry.owner_user_id);
+// What the entry is (blueprint, book, planner), drawn beside the title.
+const root = entry.revision?.root;
+---
+
+<section data-entry-metadata data-entry-id={entry.id}>
+	<div data-metadata-display>
+		<h1 class="entry-title">
+			{root && <BlueprintIcon kind={root.kind} icons={root.icons} />}
+			<span set:html={formatRichText(entry.title || "Untitled entry")} />
+			{canEdit && (
+				<button
+					type="button"
+					class="icon-button"
+					data-edit-details
+					aria-label="Edit details"
+					data-tooltip={
+						visibilityEditable
+							? "Edit title, description, tags and visibility"
+							: "Edit title, description and tags"
+					}
+				>
+					<Pencil aria-hidden="true" />
+				</button>
+			)}
+		</h1>
+		{entry.description && (
+			<div class="entry-description" set:html={renderMarkdown(entry.description)} />
+		)}
+		<TagList tags={tags} label="Entry tags" />
+	</div>
+	{canEdit && (
+		<form data-metadata-form hidden>
+			<EntryDetailsFields
+				idPrefix="entry"
+				tagGroups={tagGroups}
+				title={entry.title}
+				description={entry.description}
+				tags={entry.tags}
+				visibility={visibilityEditable ? entry.visibility : undefined}
+				alias={
+					visibilityEditable && entry.owner_username
+						? { username: entry.owner_username, current: entry.alias ?? "" }
+						: undefined
+				}
+				spoiler={entry.spoiler}
+				commentCount={commentCount}
+			/>
+			<div class="form-actions">
+				<button type="submit" class="save">
+					<Save aria-hidden="true" />
+					Save
+				</button>
+				<button type="button" class="secondary outline cancel" data-cancel-details>
+					<X aria-hidden="true" />
+					Cancel
+				</button>
+			</div>
+		</form>
+	)}
+	<p data-metadata-status role="status" aria-live="polite"></p>
+</section>
+
+<script>
+	import "./entry-metadata.ts";
+</script>
+
+<style>
+	[data-entry-metadata] {
+		margin-bottom: 1.5rem;
+	}
+	:global([data-entry-metadata] [hidden]) {
+		display: none !important;
+	}
+	[data-metadata-status]:empty {
+		margin: 0;
+	}
+	.entry-title {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+		overflow-wrap: anywhere;
+	}
+	.entry-title > span {
+		min-width: 0;
+		flex: 1;
+	}
+	[data-edit-details] {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		/* Taller than a text line: negative margins keep it from growing the row. */
+		margin: -0.5rem 0;
+	}
+	.entry-description {
+		min-width: 0;
+		margin-bottom: 0.75rem;
+		overflow-wrap: anywhere;
+	}
+	.entry-description :global(> :last-child) {
+		margin-bottom: 0;
+	}
+	.entry-description :global(pre) {
+		overflow-x: auto;
+	}
+	.form-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin-top: 0.75rem;
+	}
+	.save,
+	.cancel {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: auto;
+		margin: 0;
+		padding: 0.45rem 0.75rem;
+		font-size: 0.875rem;
+	}
+	.save :global(svg),
+	.cancel :global(svg) {
+		width: 1.15rem;
+		height: 1.15rem;
+		flex: none;
+	}
+</style>

@@ -1,0 +1,130 @@
+---
+// Share menu: Reddit's submit form, the system share sheet (Web Share API,
+// shown only where the browser has one) and copy link. The shared address is
+// the page's path without query (no edit token, no tracking parameter), and
+// the Reddit link sends no referrer. Behaviour in share-menu.ts.
+import Copy from "@lucide/astro/icons/copy";
+import ExternalLink from "@lucide/astro/icons/external-link";
+import Share2 from "@lucide/astro/icons/share-2";
+import { redditSubmitUrl, shareableUrl } from "@lib/share";
+
+interface Props {
+	/** The title shared along with the link. */
+	title: string;
+}
+const { title } = Astro.props;
+// On the public origin (as canonical links): behind a proxy or a port
+// mapping the request's own URL names the server's internal address.
+const url = shareableUrl(Astro.url, Astro.site);
+---
+
+<span class="share" data-share data-share-url={url} data-share-title={title}>
+	<button
+		type="button"
+		class="icon-button"
+		data-share-toggle
+		aria-haspopup="menu"
+		aria-expanded="false"
+		aria-label="Share"
+		data-tooltip="Share"
+		data-placement="left"
+	>
+		<Share2 aria-hidden="true" />
+	</button>
+	<ul class="menu" role="menu" hidden data-share-menu>
+		<li role="none">
+			<a
+				role="menuitem"
+				href={redditSubmitUrl(url, title)}
+				target="_blank"
+				rel="noopener noreferrer"
+			>
+				<ExternalLink aria-hidden="true" /> Share on Reddit
+			</a>
+		</li>
+		<li role="none" hidden data-share-native>
+			<button type="button" role="menuitem" data-share-native-button>
+				<Share2 aria-hidden="true" /> Share…
+			</button>
+		</li>
+		<li role="none">
+			<button type="button" role="menuitem" data-share-copy>
+				<Copy aria-hidden="true" /> <span data-share-copy-label>Copy link</span>
+			</button>
+		</li>
+	</ul>
+</span>
+
+<script>
+	import "./share-menu.ts";
+</script>
+
+<style>
+	.share {
+		position: relative;
+		display: inline-flex;
+	}
+
+	.menu {
+		position: absolute;
+		z-index: 10;
+		right: 0;
+		bottom: calc(100% + 0.25rem);
+		--menu-color: var(--pico-color);
+		min-width: 12rem;
+		margin: 0;
+		padding: 0.25rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-card-background-color);
+		box-shadow: 0 0.5rem 1.25rem rgb(0 0 0 / 0.25);
+		list-style: none;
+	}
+
+	.menu[hidden],
+	.menu li[hidden] {
+		display: none;
+	}
+
+	.menu li {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	/* Link and button items look the same in every state: Pico colours links
+	   with the primary colour and buttons as filled primary buttons, so both
+	   are reset through its variables. */
+	.menu :is(a, button),
+	.menu :is(a, button):is(:hover, :active, :focus, :focus-visible, :visited) {
+		--pico-background-color: transparent;
+		--pico-border-color: transparent;
+		--pico-color: var(--menu-color);
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		margin: 0;
+		padding: 0.45rem 0.6rem;
+		border: none;
+		border-radius: var(--pico-border-radius);
+		background: transparent;
+		box-shadow: none;
+		color: var(--menu-color);
+		font-size: 0.875rem;
+		font-weight: 400;
+		text-align: left;
+		text-decoration: none;
+		cursor: pointer;
+	}
+
+	.menu :is(a, button):is(:hover, :focus-visible) {
+		background: var(--pico-muted-border-color);
+	}
+
+	.menu :global(svg) {
+		width: 1rem;
+		height: 1rem;
+		flex: none;
+	}
+</style>

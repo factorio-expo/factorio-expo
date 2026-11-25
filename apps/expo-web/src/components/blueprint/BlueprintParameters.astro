@@ -1,0 +1,220 @@
+---
+// Blueprint parameters as a scannable list. Independent parameters carry an
+// orange bar; dependent ones (relations, formulas) a grey bar. A dependent row
+// may reference any earlier parameter, so rows are not nested. Everything is read-only
+// and formulas are shown, never evaluated. Wraps on narrow screens and clamps
+// long user-provided names.
+import type { BlueprintParameter } from "@lib/api";
+import { isSlot, parameterRows } from "@utils/parameters.ts";
+import Collapsible from "@components/common/Collapsible.astro";
+import GameIcon from "@factorio-expo/ui/game/GameIcon.astro";
+import Hash from "@lucide/astro/icons/hash";
+
+interface Props {
+	parameters?: BlueprintParameter[] | null;
+}
+
+const { parameters } = Astro.props;
+const items = parameterRows(parameters);
+---
+
+{items.length > 0 && (
+	<Collapsible title="Parameters" count={items.length}>
+		<p class="note">
+			<small>
+				As defined in the blueprint, read-only. Formulas are shown, not evaluated.
+			</small>
+		</p>
+		<ul>
+			{items.map((item) => (
+				<li class:list={["param", { "param--dependent": item.dependent }]}>
+					{item.kind === "unknown" ? (
+						<code>{item.raw}</code>
+					) : (
+						<Fragment>
+							<span class="param-head">
+								{item.kind === "id" && item.slot && (
+									<GameIcon prototypeType="item" name={item.slot} decorative />
+								)}
+								{item.kind === "number" && (
+									<Hash class="number-mark" aria-label="Number parameter" />
+								)}
+								<span
+									class:list={[
+										"param-name",
+										{ "param-name--empty": item.name === "" },
+									]}
+									title={
+										item.name ||
+										(item.kind === "number" ? item.formula : undefined) ||
+										undefined
+									}
+								>
+									{item.name ||
+										(item.kind === "id"
+											? item.value
+											: item.formula
+												? `ƒ ${item.formula}`
+												: "Unnamed")}
+								</span>
+							</span>
+							<span class="param-tags">
+								{!item.dependent && <span class="tag tag--input">independent</span>}
+								{item.kind === "id" && item.relation && (
+									<span class="tag">
+										{item.relation.label}
+										{isSlot(item.relation.target) ? (
+											<GameIcon
+												prototypeType="item"
+												name={item.relation.target}
+												label={item.relation.target}
+											/>
+										) : (
+											<code>{item.relation.target}</code>
+										)}
+									</span>
+								)}
+								{item.kind === "id" && item.quality && (
+									<span class="tag" title="Quality condition">
+										{item.quality.comparator}
+										<GameIcon
+											prototypeType="quality"
+											name={item.quality.name}
+											label={item.quality.name}
+										/>
+									</span>
+								)}
+								{item.kind === "number" && item.variable && (
+									<span class="tag">
+										<code>{item.variable}</code>
+									</span>
+								)}
+								{item.kind === "number" && item.value && (
+									<span class="tag">
+										= <code>{item.value}</code>
+									</span>
+								)}
+								{item.kind === "number" && item.fixed && (
+									<span class="tag">fixed</span>
+								)}
+							</span>
+							{item.kind === "number" && item.formula && item.name && (
+								<code class="formula">ƒ {item.formula}</code>
+							)}
+						</Fragment>
+					)}
+				</li>
+			))}
+		</ul>
+	</Collapsible>
+)}
+
+<style>
+	.note {
+		margin-bottom: 0.5rem;
+		color: var(--pico-muted-color);
+	}
+
+	ul {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.param {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.2rem 0.6rem;
+		margin: 0;
+		padding: 0.35rem 0.6rem;
+		border-left: 3px solid var(--pico-primary-background, var(--pico-primary));
+		border-radius: var(--pico-border-radius);
+		background: var(--pico-card-background-color, var(--pico-background-color));
+		list-style: none;
+	}
+
+	.param--dependent {
+		border-left-color: var(--pico-muted-border-color);
+	}
+
+	.param-head {
+		display: flex;
+		flex: 1 1 12rem;
+		align-items: center;
+		gap: 0.4rem;
+		min-width: 0;
+	}
+
+	.param-name {
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		overflow: hidden;
+		min-width: 0;
+		overflow-wrap: anywhere;
+		font-size: 0.9rem;
+	}
+
+	.param--dependent .param-name {
+		font-size: 0.85rem;
+	}
+
+	.param :global(.number-mark) {
+		flex: none;
+		width: 1.1rem;
+		height: 1.1rem;
+		padding: 0.1rem;
+		border-radius: 0.25rem;
+		background: var(--pico-muted-border-color);
+		color: var(--pico-color);
+	}
+
+	.param-name--empty {
+		color: var(--pico-muted-color);
+		font-family: var(--pico-font-family-monospace);
+	}
+
+	.param-tags {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.25rem;
+		max-width: 100%;
+	}
+
+	.tag {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0 0.4rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: 1rem;
+		color: var(--pico-muted-color);
+		font-size: 0.75rem;
+		white-space: nowrap;
+	}
+
+	.tag--input {
+		border-color: transparent;
+		background: var(--pico-primary-background, var(--pico-primary));
+		color: var(--pico-primary-inverse, #fff);
+	}
+
+	.tag code,
+	.formula {
+		padding: 0;
+		background: none;
+		font-size: 0.75rem;
+	}
+
+	.formula {
+		flex: 1 1 100%;
+		color: var(--pico-muted-color);
+		overflow-wrap: anywhere;
+	}
+</style>

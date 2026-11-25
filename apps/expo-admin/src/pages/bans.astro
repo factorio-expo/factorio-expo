@@ -1,0 +1,179 @@
+---
+// User bans (create, change the end, revoke) and address bans (by hash only;
+// lift early), as tabs.
+import BanForm from "@components/BanForm.astro";
+import BanTable from "@components/BanTable.astro";
+import Outcome from "@components/Outcome.astro";
+import Console from "@layouts/Console.astro";
+import { FormError, handlePost } from "@lib/api/actions";
+import { loadFromApi } from "@lib/api/page";
+import { handleBanPost, reasonLabel } from "@lib/bans";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { formText } from "@lib/forms";
+
+const posted = await handlePost(Astro, async (api, form) => {
+	const notice = await handleBanPost(api, form);
+	if (notice) return notice;
+	if (formText(form, "action") === "lift") {
+		await api.liftIPBan(formText(form, "hash"), formText(form, "ban_action"), "");
+		return "Address ban lifted.";
+	}
+	throw new FormError("Unknown action.");
+});
+if (posted) return posted;
+
+const tabs = [
+	{ key: "active", label: "Active" },
+	{ key: "ended", label: "Ended" },
+	{ key: "address", label: "Address bans" },
+] as const;
+type Tab = (typeof tabs)[number]["key"];
+const tabParam = Astro.url.searchParams.get("tab");
+const tab: Tab = tabs.some((t) => t.key === tabParam) ? (tabParam as Tab) : "active";
+const username = Astro.url.searchParams.get("username")?.trim() ?? "";
+
+const loaded = await loadFromApi(Astro, async (api) => {
+	const [bans, ipBans] = await Promise.all([api.bans(username), api.ipBans()]);
+	return { bans, ipBans };
+});
+const data = loaded.data;
+const counts: Record<Tab, number | undefined> = {
+	active: data?.bans.active.length,
+	ended: data?.bans.ended.length,
+	address: data?.ipBans.length,
+};
+
+const tabHref = (key: Tab) => {
+	const params = new URLSearchParams();
+	if (key !== "active") params.set("tab", key);
+	if (username && key !== "address") params.set("username", username);
+	const search = params.toString();
+	return search ? `/bans?${search}` : "/bans";
+};
+const userHref = (name: string) => `/bans?username=${encodeURIComponent(name)}`;
+---
+
+<Console
+	title="Bans"
+	nav="bans"
+	description="Who may not comment, report or upload, and for how long."
+>
+	<Outcome loadError={loaded.error} />
+
+	<details class="panel new-ban" open={username !== "" || undefined}>
+		<summary>Ban a user</summary>
+		<BanForm username={username} />
+	</details>
+
+	<nav class="tabs" aria-label="Ban lists">
+		{tabs.map((t) => (
+			<a href={tabHref(t.key)} aria-current={t.key === tab ? "page" : undefined}>
+				{t.label}
+				{counts[t.key] !== undefined && <span class="count">{counts[t.key]}</span>}
+			</a>
+		))}
+	</nav>
+
+	{tab !== "address" && (
+		<form method="get" class="toolbar">
+			{tab !== "active" && <input type="hidden" name="tab" value={tab} />}
+			<input
+				type="search"
+				name="username"
+				value={username}
+				placeholder="Filter by username"
+				aria-label="Filter by username"
+			/>
+			<button type="submit" class="secondary">
+				Filter
+			</button>
+			{username && <a href={tab === "active" ? "/bans" : `/bans?tab=${tab}`}>Clear</a>}
+		</form>
+	)}
+
+	{data &&
+		tab === "active" &&
+		(data.bans.active.length === 0 ? (
+			<p class="empty">No active bans{username && ` of ${username}`}.</p>
+		) : (
+			<BanTable bans={data.bans.active} userHref={userHref} />
+		))}
+
+	{data &&
+		tab === "ended" &&
+		(data.bans.ended.length === 0 ? (
+			<p class="empty">No ended bans{username && ` of ${username}`}.</p>
+		) : (
+			<BanTable bans={data.bans.ended} userHref={userHref} />
+		))}
+
+	{data && tab === "address" && (
+		<>
+			<p class="muted intro">
+				Short bans of the address a banned account last tried from, or of an anonymous
+				reporter. Only a keyed hash of the address is stored.
+			</p>
+			{data.ipBans.length === 0 ? (
+				<p class="empty">No active address bans.</p>
+			) : (
+				<div class="table-wrap">
+					<table class="data">
+						<thead>
+							<tr>
+								<th scope="col">Address hash</th>
+								<th scope="col">Blocks</th>
+								<th scope="col">Reason</th>
+								<th scope="col">Ends</th>
+								<th scope="col" />
+							</tr>
+						</thead>
+						<tbody>
+							{data.ipBans.map((ban) => (
+								<tr>
+									<td>
+										<code title={ban.hash}>{ban.hash.slice(0, 12)}…</code>
+									</td>
+									<td>{ban.action}</td>
+									<td>{reasonLabel(ban.reason_code)}</td>
+									<td>{isoDateTime(ban.expires_at)}</td>
+									<td class="actions-cell">
+										<form method="post" class="inline">
+											<input type="hidden" name="action" value="lift" />
+											<input type="hidden" name="hash" value={ban.hash} />
+											<input
+												type="hidden"
+												name="ban_action"
+												value={ban.action}
+											/>
+											<button type="submit" class="secondary outline small">
+												Lift
+											</button>
+										</form>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			)}
+		</>
+	)}
+</Console>
+
+<style>
+	.new-ban {
+		margin-bottom: 1.25rem;
+	}
+	.new-ban > summary {
+		font-weight: 600;
+	}
+	.new-ban[open] > summary {
+		margin-bottom: 0.9rem;
+	}
+	.new-ban :global(.ban-form) {
+		max-width: 36rem;
+	}
+	.intro {
+		margin-top: 0;
+	}
+</style>

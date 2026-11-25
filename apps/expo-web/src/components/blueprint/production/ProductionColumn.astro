@@ -1,0 +1,91 @@
+---
+// One material category (ingredients / intermediates / products): a tinted
+// panel whose arrow icon says what the category does for the factory. The
+// default slot receives the <li> cells.
+import ArrowDownToLine from "@lucide/astro/icons/arrow-down-to-line";
+import ArrowLeftRight from "@lucide/astro/icons/arrow-left-right";
+import ArrowUpFromLine from "@lucide/astro/icons/arrow-up-from-line";
+
+interface Props {
+	title: string;
+	modifier: "ingredients" | "intermediates" | "products";
+	count: number;
+}
+
+const { title, modifier, count } = Astro.props;
+---
+
+<section class={`production-column production-column--${modifier}`}>
+	<h3>
+		{modifier === "ingredients" && <ArrowDownToLine aria-hidden="true" />}
+		{modifier === "intermediates" && <ArrowLeftRight aria-hidden="true" />}
+		{modifier === "products" && <ArrowUpFromLine aria-hidden="true" />}
+		{title} <small>{count}</small>
+	</h3>
+	{count === 0 ? (
+		<p>
+			<small>None</small>
+		</p>
+	) : (
+		<ul class="material-list">
+			<slot />
+		</ul>
+	)}
+</section>
+
+<style>
+	.production-column {
+		--tint: var(--pico-muted-color);
+		min-width: 0;
+		margin-bottom: 0.75rem;
+		padding: 0.5rem 0.75rem 0.75rem;
+		border-left: 4px solid var(--tint);
+		border-radius: var(--pico-border-radius);
+		background: color-mix(in srgb, var(--tint) 8%, transparent);
+	}
+
+	.production-column--ingredients {
+		--tint: var(--pico-del-color, #c62828);
+	}
+
+	.production-column--products {
+		--tint: var(--pico-ins-color, #2e7d32);
+	}
+
+	.production-column--intermediates {
+		--tint: #d4a017;
+	}
+
+	.production-column h3 {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin-bottom: 0.5rem;
+		font-size: 1rem;
+	}
+
+	.production-column h3 svg {
+		width: 1.1rem;
+		height: 1.1rem;
+		color: var(--tint);
+	}
+
+	.production-column h3 small {
+		color: var(--pico-muted-color);
+		font-weight: 400;
+	}
+
+	.production-column p {
+		margin: 0;
+	}
+
+	.material-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+</style>

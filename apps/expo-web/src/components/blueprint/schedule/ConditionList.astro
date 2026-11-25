@@ -1,0 +1,42 @@
+---
+// Wait / interrupt conditions laid out like the game's schedule window: one
+// full-width row per condition, and between rows the connector in a gutter on
+// the left, AND in the inner column and OR in the outer one. Rows are grouped
+// as the game evaluates them (conditionGroups: AND binds tighter than OR).
+import type { ScheduleWaitCondition } from "@lib/api";
+import { conditionGroups } from "@utils/schedule.ts";
+import ConditionLabel from "./ConditionLabel.astro";
+import "./schedule-tree.css";
+
+interface Props {
+	conditions?: ScheduleWaitCondition[];
+	/** Shown when there are none ("No wait condition" for a stop). */
+	empty?: string;
+}
+
+const { conditions, empty = "No wait condition" } = Astro.props;
+const groups = conditionGroups(conditions);
+// Two gutter columns only when both connectors occur (as in game).
+const both = groups.length > 1 && groups.some((group) => group.length > 1);
+---
+
+{groups.length === 0 ? (
+	<p class="st-none">{empty}</p>
+) : (
+	<ul class="st-conds" data-both={both ? "" : undefined}>
+		{groups.map((group, index) =>
+			group.map((condition, position) => (
+				<>
+					{(index > 0 || position > 0) && (
+						<li class="st-join" data-join={position === 0 ? "or" : "and"}>
+							<span>{position === 0 ? "or" : "and"}</span>
+						</li>
+					)}
+					<li class="st-row">
+						<ConditionLabel condition={condition} />
+					</li>
+				</>
+			)),
+		)}
+	</ul>
+)}

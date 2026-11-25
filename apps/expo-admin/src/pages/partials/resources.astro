@@ -1,0 +1,17 @@
+---
+// The Overview's resource panel body alone, polled by the Overview
+// every few seconds. A partial: no layout, just the fragment.
+import { ADMIN_DOZZLE_URL } from "astro:env/server";
+
+import ResourceUsage from "@components/ResourceUsage.astro";
+import { readResourceUsage } from "@lib/dozzle";
+
+export const partial = true;
+
+if (!ADMIN_DOZZLE_URL) {
+	return new Response(null, { status: 404 });
+}
+const resources = await readResourceUsage(ADMIN_DOZZLE_URL);
+---
+
+<ResourceUsage resources={resources} />

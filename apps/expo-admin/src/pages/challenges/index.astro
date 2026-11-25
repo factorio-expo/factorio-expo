@@ -1,0 +1,58 @@
+---
+// Challenges: every challenge, drafts too, the newest first.
+import RichText from "@factorio-expo/ui/game/RichText.astro";
+import Outcome from "@components/Outcome.astro";
+import Console from "@layouts/Console.astro";
+import { loadFromApi } from "@lib/api/page";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+
+const loaded = await loadFromApi(Astro, (api) => api.challenges());
+const challenges = loaded.data;
+---
+
+<Console
+	title="Challenges"
+	nav="challenges"
+	description="Design challenges: goal, restrictions, dates and entries."
+>
+	<a slot="actions" href="/challenges/new" role="button">
+		New challenge
+	</a>
+	<Outcome loadError={loaded.error} />
+	{challenges &&
+		(challenges.length === 0 ? (
+			<p class="empty">No challenges yet.</p>
+		) : (
+			<table class="data">
+				<thead>
+					<tr>
+						<th>Title</th>
+						<th>Status</th>
+						<th>Start</th>
+						<th>Deadline</th>
+						<th>Voting ends</th>
+						<th>Entries</th>
+					</tr>
+				</thead>
+				<tbody>
+					{challenges.map((challenge) => (
+						<tr>
+							<td>
+								<a href={`/challenges/${challenge.id}`}>
+									<RichText text={challenge.title} />
+								</a>{" "}
+								<code class="muted">{challenge.slug}</code>
+							</td>
+							<td>
+								<span class="pill">{challenge.status}</span>
+							</td>
+							<td>{isoDateTime(challenge.starts_at)}</td>
+							<td>{isoDateTime(challenge.ends_at)}</td>
+							<td>{isoDateTime(challenge.voting_ends_at)}</td>
+							<td>{challenge.entry_count}</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		))}
+</Console>

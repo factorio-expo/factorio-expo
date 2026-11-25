@@ -1,0 +1,30 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+
+.idea/
+.vscode/
+
+.claude/
+.codex/
+
+node_modules/
+
+.bin/
+bin/
+dist/
+build/
+coverage/
+
+*.log
+*.tmp
+
+factorio-data/
+# Default host directory of the API's file storage (EXPO_STORAGE_DIR).
+/data/
+factorio/factorio-server/factorio-linux64.tar.xz
+factorio/factorio-server/factorio/
+# Local-only helper files
+/scripts/
+/internal-docs/

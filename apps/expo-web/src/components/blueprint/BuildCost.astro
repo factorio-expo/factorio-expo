@@ -1,0 +1,112 @@
+---
+// What a blueprint costs to build (from the analysis): the items to place it
+// and the raw resources they take, at normal quality.
+import Info from "@lucide/astro/icons/info";
+import Chip from "@components/common/Chip.astro";
+import Collapsible from "@components/common/Collapsible.astro";
+import type { BuildCost } from "@lib/api";
+import { formatToken } from "@factorio-expo/ui/game/icon-token.ts";
+import { formatAmount } from "@utils/production.ts";
+
+interface Props {
+	cost?: BuildCost;
+}
+
+const { cost } = Astro.props;
+const items = (cost?.items ?? []).toSorted((a, b) => b.count - a.count);
+const raw = cost?.raw ?? [];
+const RAW_NOTE = "Normal quality, no productivity";
+---
+
+{cost && (items.length > 0 || raw.length > 0) && (
+	<Collapsible title="Build cost">
+		<div class="build-cost">
+			<div>
+				<h3>Items</h3>
+				<ul class="chips" data-build-items>
+					{items.map((item) => (
+						<li>
+							<Chip
+								iconToken={formatToken({
+									type: "item",
+									name: item.name,
+									quality: item.quality,
+								})}
+								label={`${item.name} × ${item.count.toLocaleString("en-US")}`}
+							>
+								{formatAmount(item.count)}
+							</Chip>
+						</li>
+					))}
+				</ul>
+			</div>
+			{raw.length > 0 && (
+				<div>
+					<h3>
+						Raw resources
+						<span
+							role="img"
+							aria-label={RAW_NOTE}
+							data-tooltip={RAW_NOTE}
+							data-placement="top"
+						>
+							<Info size="14" />
+						</span>
+					</h3>
+					<ul class="chips" data-raw-resources>
+						{raw.map((material) => (
+							<li>
+								<Chip
+									iconToken={formatToken({
+										type: material.type,
+										name: material.name,
+										quality: "",
+									})}
+									label={`${material.name} × ${material.amount.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}
+								>
+									{formatAmount(material.amount)}
+								</Chip>
+							</li>
+						))}
+					</ul>
+				</div>
+			)}
+		</div>
+	</Collapsible>
+)}
+
+<style>
+	.build-cost {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+		gap: 0.75rem 1.5rem;
+	}
+
+	h3 {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin: 0 0 0.35rem;
+		font-size: 0.875rem;
+		color: var(--pico-muted-color);
+	}
+
+	h3 svg {
+		color: var(--pico-primary-background);
+		cursor: pointer;
+	}
+
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.chips li {
+		margin: 0;
+		list-style: none;
+	}
+</style>

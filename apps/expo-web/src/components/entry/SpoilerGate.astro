@@ -1,0 +1,64 @@
+---
+// Spoiler/NSFW entries (entries.spoiler): blurs every image inside until the
+// viewer clicks "Show previews". Without `spoiler` it renders its content as
+// is. The blur also covers the zoom dialog, which sits inside the gate.
+import EyeOff from "@lucide/astro/icons/eye-off";
+
+interface Props {
+	spoiler: boolean;
+}
+
+const { spoiler } = Astro.props;
+---
+
+{spoiler ? (
+	<div class="spoiler-gate" data-spoiler-gate data-hidden>
+		<p class="spoiler-notice" data-spoiler-notice>
+			<EyeOff aria-hidden="true" />
+			<span>This entry is marked as a spoiler or NSFW. Its previews are hidden.</span>
+			<button type="button" class="secondary outline" data-spoiler-reveal>
+				Show previews
+			</button>
+		</p>
+		<slot />
+	</div>
+) : (
+	<slot />
+)}
+
+<script>
+	for (const button of document.querySelectorAll<HTMLButtonElement>("[data-spoiler-reveal]")) {
+		button.addEventListener("click", () => {
+			const gate = button.closest<HTMLElement>("[data-spoiler-gate]");
+			gate?.removeAttribute("data-hidden");
+			button.closest("[data-spoiler-notice]")?.remove();
+		});
+	}
+</script>
+
+<style>
+	.spoiler-notice {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 0.75rem;
+		padding: 0.75rem 1rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: var(--pico-border-radius);
+	}
+
+	.spoiler-notice button {
+		width: auto;
+		margin: 0 0 0 auto;
+		padding: 0.35rem 0.75rem;
+	}
+
+	.spoiler-gate[data-hidden] :global(img) {
+		filter: blur(24px);
+	}
+
+	/* Keep the blurred image inside its box. */
+	.spoiler-gate[data-hidden] :global(:has(> img)) {
+		overflow: hidden;
+	}
+</style>

@@ -1,0 +1,622 @@
+---
+// Entry/result card shared by the home/search page, public profile and public
+// collection pages. Takes EntryCardData (search results with their tags
+// resolved by tagRefs; EntrySummary rows go through toCard). A search
+// result for a blueprint or planner inside a book links the book in its
+// header and opens the blueprint's page, or the planner's row on the entry.
+// A staff pick's caption takes the book row's place, with the same look. A
+// card whose blueprint (or, for a book, any blueprint) leads a leaderboard
+// board gets a trophy chip on its preview and a primary-colour ring.
+
+import { assetUrl } from "@lib/api/public-asset";
+import { cardView, type EntryCardData } from "@utils/entry-card.ts";
+import { formatRichText, formatRichTextSummary } from "@factorio-expo/ui/game/rich-text.ts";
+import { stripRichText } from "@factorio-expo/ui/game/rich-text.ts";
+import { markdownToPlainText } from "@utils/plain-text.ts";
+import BookOpen from "@lucide/astro/icons/book-open";
+import Eye from "@lucide/astro/icons/eye";
+import EyeOff from "@lucide/astro/icons/eye-off";
+import Hourglass from "@lucide/astro/icons/hourglass";
+import Trophy from "@lucide/astro/icons/trophy";
+import BlueprintIcon from "@components/common/BlueprintIcon.astro";
+import TagList from "@components/common/TagList.astro";
+import { recordLabel } from "@lib/achievements";
+import { isoDate } from "@factorio-expo/ui/utils/dates.ts";
+import FavoriteButton from "./actions/FavoriteButton.astro";
+import PinButton from "./actions/PinButton.astro";
+
+export interface Props {
+	card: EntryCardData;
+	/** Above the fold: load the image first instead of lazily (it is the page's LCP). */
+	eager?: boolean;
+	/** The viewer owns this listed entry: adds the pin toggle (their own profile). */
+	pinnable?: boolean;
+	/** The title's heading level: 2 under the page title, 3 under a section heading. */
+	headingLevel?: 2 | 3;
+	/** A staff pick's caption, shown where a book's title goes and looking the same. */
+	caption?: string;
+	/** What the caption is, for screen readers ("Staff pick", "Record"). */
+	captionLabel?: string;
+}
+
+const {
+	card,
+	eager = false,
+	pinnable = false,
+	headingLevel = 2,
+	caption,
+	captionLabel = "Note",
+} = Astro.props;
+const Heading = `h${headingLevel}` as "h2" | "h3";
+const TAG_LINES = 3;
+const spaceAgeIcon = formatRichText("[space-age]");
+const views = card.view_count.toLocaleString("en-US");
+const { href, bookHref, previewUrl, mosaic, badge, record, moreRecords, recordTitle } = cardView(
+	card,
+	assetUrl,
+);
+---
+
+<article class="entry-card" data-record={record ? "" : undefined}>
+	<header>
+		<a href={href}>
+			<div
+				class="preview"
+				data-card-preview
+				data-kind={card.kind}
+				data-empty={previewUrl || card.preview_pending ? undefined : ""}
+				data-spoiler={card.spoiler && previewUrl ? "" : undefined}
+				aria-busy={!previewUrl && card.preview_pending ? "true" : undefined}
+			>
+				{mosaic.length > 0 && (
+					<div class="mosaic" data-covers={mosaic.length}>
+						{mosaic.map((src) => (
+							<img
+								src={src}
+								alt=""
+								loading={eager ? "eager" : "lazy"}
+								decoding="async"
+							/>
+						))}
+					</div>
+				)}
+				{previewUrl && mosaic.length === 0 && (
+					<img
+						src={previewUrl}
+						alt={stripRichText(card.title)}
+						width="768"
+						height="512"
+						loading={eager ? "eager" : "lazy"}
+						fetchpriority={eager ? "high" : "auto"}
+						decoding="async"
+					/>
+				)}
+				{!previewUrl && card.preview_pending && (
+					<span class="visually-hidden">Preview is rendering</span>
+				)}
+				{badge && (
+					<span class="version-badge" data-tone={badge.tone} title={badge.title}>
+						{badge.text}
+					</span>
+				)}
+				{record && (
+					<span class="record-badge" title={recordTitle} data-card-record>
+						<Trophy aria-hidden="true" />
+						<span class="visually-hidden">Record:</span>
+						{recordLabel(record)}
+						{moreRecords > 0 && <span class="more">+{moreRecords}</span>}
+					</span>
+				)}
+				{card.spoiler && previewUrl && (
+					<span class="spoiler-label">
+						<EyeOff aria-hidden="true" />
+						Spoiler: click to show
+					</span>
+				)}
+			</div>
+			<div class="title">
+				<BlueprintIcon kind={card.kind} icons={card.icons} />
+				<Heading set:html={formatRichTextSummary(card.title)} />
+			</div>
+		</a>
+	</header>
+	{caption && (
+		<p class="book" data-card-caption title={caption}>
+			<span class="visually-hidden">{captionLabel}:</span>
+			<span class="book-title" set:html={formatRichTextSummary(caption)} />
+		</p>
+	)}
+	{!caption && bookHref && (
+		<a class="book" href={bookHref}>
+			<BookOpen aria-hidden="true" />
+			<span class="visually-hidden">In book</span>
+			<span class="book-title" set:html={formatRichTextSummary(card.book_title ?? "")} />
+		</a>
+	)}
+	{card.description && (
+		<p set:html={formatRichTextSummary(markdownToPlainText(card.description))} />
+	)}
+	{card.mod_badges && card.mod_badges.length > 0 && (
+		<ul class="mod-badges" aria-label="Needs">
+			{card.mod_badges.map((badge) => (
+				<li>
+					<a href={badge.href} title={`Search blueprints that need ${badge.label}`}>
+						{badge.value === "space-age" && <span set:html={spaceAgeIcon} />}
+						{badge.label}
+					</a>
+				</li>
+			))}
+		</ul>
+	)}
+	<TagList tags={card.tags ?? []} lines={TAG_LINES} />
+	<footer>
+		{card.owner_username ? (
+			<small class="owner">
+				<a href={`/u/${encodeURIComponent(card.owner_username)}`}>{card.owner_username}</a>
+			</small>
+		) : (
+			<small class="owner anonymous">Anonymous</small>
+		)}
+		{card.visibility && card.visibility !== "public" && (
+			<small class="visibility" data-visibility={card.visibility}>
+				{card.visibility === "private" ? "Private" : "Unlisted"}
+			</small>
+		)}
+		{card.expires_at && (
+			<small class="expires" title={`Expires ${card.expires_at}`}>
+				<Hourglass size={14} aria-hidden="true" />
+				<span>
+					Expires{" "}
+					<time datetime={card.expires_at} data-local="date">
+						{isoDate(card.expires_at)}
+					</time>
+				</span>
+			</small>
+		)}
+		<span class="counts">
+			<small class="views" title={`${views} views`} data-card-views>
+				<Eye aria-hidden="true" />
+				<span>{views}</span>
+				<span class="visually-hidden">views</span>
+			</small>
+			<small>
+				<FavoriteButton
+					entryId={card.entry_id}
+					count={card.favorites_count}
+					favorited={card.is_favorited}
+				/>
+			</small>
+			{pinnable && (card.visibility ?? "public") === "public" && (
+				<small>
+					<PinButton entryId={card.entry_id} pinned={card.is_pinned ?? false} />
+				</small>
+			)}
+		</span>
+	</footer>
+</article>
+
+<script>
+	import "./card-preview.ts";
+</script>
+
+<style>
+	.visibility {
+		color: var(--pico-muted-color);
+	}
+
+	.expires {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		color: var(--pico-muted-color);
+	}
+
+	/* Secondary facts: one muted color for every count, zero or not, so the
+	   footers of a grid read alike. A favorited star keeps its accent. */
+	.counts {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		color: var(--pico-muted-color);
+	}
+
+	.counts :global(.favorite),
+	.counts :global(.pin-toggle) {
+		--pico-color: var(--pico-muted-color);
+	}
+
+	.counts :global(button[aria-pressed="true"]) {
+		color: var(--pico-primary);
+	}
+
+	.owner {
+		overflow: hidden;
+		min-width: 0;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.anonymous {
+		color: var(--pico-muted-color);
+		font-style: italic;
+		opacity: 0.75;
+	}
+
+	/* Flex rows, so neither count sits on a text baseline with descender
+	   space below it; both centre on the same line. */
+	.counts > small {
+		display: flex;
+		align-items: center;
+	}
+
+	/* The same look as the favorites count (FavoriteButton's static count). */
+	.views {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+
+	.views :global(svg) {
+		width: 1.15rem;
+		height: 1.15rem;
+		flex: none;
+	}
+
+	/* Grid rows stretch every card to the row's tallest, and the footer's
+	   margin-top: auto lines the footers up; no fixed height. The card does
+	   not clip (tooltips of its buttons reach outside it); the header clips
+	   the preview to the rounded corners instead. */
+	.entry-card {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		margin: 0;
+		padding: 0.75rem;
+		overflow-wrap: anywhere;
+		transition:
+			box-shadow 0.2s,
+			transform 0.2s;
+	}
+
+	.entry-card:hover,
+	.entry-card:focus-within {
+		box-shadow: 0 0.75rem 1.75rem rgb(0 0 0 / 0.22);
+		transform: translateY(-3px);
+	}
+
+	/* A record holder: a ring in the theme's primary colour, drawn as a
+	   shadow so it takes no space (no layout shift), kept on hover. */
+	.entry-card[data-record] {
+		box-shadow:
+			0 0 0 2px var(--pico-primary),
+			var(--pico-card-box-shadow);
+	}
+
+	.entry-card[data-record]:hover,
+	.entry-card[data-record]:focus-within {
+		box-shadow:
+			0 0 0 2px var(--pico-primary),
+			0 0.75rem 1.75rem rgb(0 0 0 / 0.22);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.entry-card {
+			transition: none;
+		}
+		.entry-card:hover,
+		.entry-card:focus-within {
+			transform: none;
+		}
+	}
+
+	.entry-card > header a {
+		display: block;
+		text-decoration: none;
+	}
+
+	/* The book a leaf result belongs to, under its title (or a staff pick's
+	   caption, in the same place and look). Below the preview rather than above
+	   it, so every preview of a grid row starts at the same height. */
+	.entry-card > .book {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin: 0.2rem 0 0;
+		padding: 0;
+		text-decoration: none;
+		color: var(--pico-muted-color);
+		font-size: 0.8rem;
+		line-height: var(--pico-line-height);
+	}
+
+	.entry-card > a.book:hover {
+		color: var(--pico-primary);
+	}
+
+	.book :global(svg) {
+		width: 1rem;
+		height: 1rem;
+		flex: none;
+	}
+
+	.book-title {
+		overflow: hidden;
+		min-width: 0;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	/* The root's kind icon (book, blueprint, planner) beside the title. */
+	.entry-card > header {
+		margin: -0.75rem -0.75rem 0;
+		padding: 0;
+		overflow: hidden;
+		border: none;
+		border-radius: var(--pico-border-radius) var(--pico-border-radius) 0 0;
+		background: none;
+	}
+
+	.title {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.4rem;
+		margin: 0.6rem 0.75rem 0;
+	}
+
+	.title :global(.blueprint-icon) {
+		font-size: 1.25rem;
+	}
+
+	.entry-card > header :is(h2, h3) {
+		margin: 0;
+		font-size: 1rem;
+		line-height: 1.3;
+		display: -webkit-box;
+		overflow: hidden;
+		overflow-wrap: anywhere;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+	}
+
+	/* 4:3 instead of the render's usual 3:2: tall builds get more room and
+	   wide ones lose little. */
+	.preview {
+		position: relative;
+		aspect-ratio: 4 / 3;
+		background: var(--pico-muted-border-color) center / 25% no-repeat;
+	}
+
+	/* Factorio 2.1 badge, bottom right of the preview. */
+	.version-badge {
+		position: absolute;
+		bottom: 0.4rem;
+		right: 0.4rem;
+		z-index: 1;
+		padding: 0.05rem 0.5rem;
+		border-radius: 1rem;
+		background: rgb(0 0 0 / 0.7);
+		color: #fff;
+		font-size: 0.7rem;
+		font-weight: 600;
+		line-height: 1.4;
+	}
+
+	.version-badge[data-tone="compatible"] {
+		background: #1f7a3d;
+	}
+
+	.version-badge[data-tone="incompatible"] {
+		background: #b3261e;
+	}
+
+	/* The leaderboard record, top left of the preview (the version badge is
+	   bottom right). The chip shrinks before it ever reaches the badge. */
+	.record-badge {
+		position: absolute;
+		top: 0.4rem;
+		left: 0.4rem;
+		z-index: 1;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		max-width: calc(100% - 4.5rem);
+		padding: 0.05rem 0.5rem;
+		overflow: hidden;
+		border-radius: 1rem;
+		background: var(--pico-primary-background);
+		color: var(--pico-primary-inverse);
+		font-size: 0.7rem;
+		font-weight: 600;
+		line-height: 1.4;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.record-badge :global(svg) {
+		width: 0.8rem;
+		height: 0.8rem;
+		flex: none;
+	}
+
+	.record-badge .more {
+		opacity: 0.85;
+	}
+
+	/* A spoiler's preview stays blurred until its first click (card-preview.ts). */
+	.preview[data-spoiler] {
+		overflow: hidden;
+	}
+
+	.preview[data-spoiler]:not([data-revealed]) img {
+		filter: blur(24px);
+	}
+
+	.spoiler-label {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem;
+		color: #fff;
+		font-size: 0.9rem;
+		font-weight: 600;
+		text-shadow: 0 1px 3px rgb(0 0 0 / 0.8);
+	}
+
+	.spoiler-label :global(svg) {
+		width: 1.1rem;
+		height: 1.1rem;
+	}
+
+	.preview[data-revealed] .spoiler-label {
+		display: none;
+	}
+
+	/* Pico's spinner, centred over the box while the image loads (card-preview.ts)
+	   or while the entry's first preview is still rendering (from the server). */
+	.preview[aria-busy="true"]::before {
+		position: absolute;
+		top: calc(50% - 0.75rem);
+		left: calc(50% - 0.75rem);
+		width: 1.5rem;
+		height: 1.5rem;
+		margin: 0;
+		background-size: 1.5rem auto;
+	}
+
+	.preview[aria-busy="true"] img {
+		opacity: 0;
+	}
+
+	/* The site icon stands in when the entry has no preview (known on the
+	   server) or the image failed to load (card-preview.ts); never while a
+	   preview is still loading. */
+	.preview:is([data-empty], [data-failed]) {
+		background-image: url("/favicon.png");
+	}
+
+	/* Planners never have a preview: the blue icon turns the game's planner
+	   colour, red for deconstruction and green for upgrade. Only the icon is
+	   tinted (a layer of its own), not the box behind it. */
+	.preview:is([data-kind="deconstruction_planner"], [data-kind="upgrade_planner"]) {
+		background-image: none;
+	}
+
+	.preview:is([data-kind="deconstruction_planner"], [data-kind="upgrade_planner"])::after {
+		position: absolute;
+		inset: 0;
+		background: url("/favicon.png") center / 25% no-repeat;
+		content: "";
+	}
+
+	.preview[data-kind="deconstruction_planner"]::after {
+		filter: hue-rotate(145deg);
+	}
+
+	.preview[data-kind="upgrade_planner"]::after {
+		filter: hue-rotate(-95deg);
+	}
+
+	/* Out of flow, so a tall image cannot stretch the 4:3 box. */
+	.preview img {
+		position: absolute;
+		inset: 0;
+		display: block;
+		width: 100%;
+		/* The width/height attributes only reserve space before load; the box is 3:2. */
+		height: 100%;
+		object-fit: contain;
+		transition: opacity 0.2s;
+	}
+
+	/* A book's collage: up to four thumbnails, three as one tall and two small. */
+	.preview .mosaic {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 2px;
+	}
+
+	.preview .mosaic img {
+		position: static;
+		min-height: 0;
+		object-fit: cover;
+		background: var(--pico-card-background-color);
+	}
+
+	.preview .mosaic[data-covers="3"] img:first-child {
+		grid-row: span 2;
+	}
+
+	/* No broken-image glyph or alt text over the icon. */
+	.preview[data-failed] img {
+		visibility: hidden;
+	}
+
+	.entry-card > p {
+		margin: 0.4rem 0 0.6rem;
+		display: -webkit-box;
+		overflow: hidden;
+		overflow-wrap: anywhere;
+		color: var(--pico-muted-color);
+		font-size: 0.8rem;
+		line-height: 1.4;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 3;
+	}
+
+	/* Needed mods: small outlined pills, distinct from the tag chips. */
+	.mod-badges {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem;
+		margin: 0 0 0.5rem;
+		padding: 0;
+		list-style: none;
+	}
+
+	/* With no description the badges follow the header directly. */
+	.entry-card > header + .mod-badges {
+		margin-top: 0.6rem;
+	}
+
+	.mod-badges li {
+		margin: 0;
+		list-style: none;
+	}
+
+	.mod-badges a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.05rem 0.5rem;
+		border: 1px solid var(--pico-primary);
+		border-radius: 1rem;
+		color: var(--pico-primary);
+		font-size: 0.7rem;
+		font-weight: 600;
+		line-height: 1.4;
+		text-decoration: none;
+	}
+
+	.mod-badges a:hover,
+	.mod-badges a:focus-visible {
+		background: var(--pico-primary-background);
+		color: var(--pico-primary-inverse);
+	}
+
+	.entry-card > :global(.tag-list) {
+		margin-bottom: 0.6rem;
+	}
+
+	.entry-card > footer {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin: auto -0.75rem -0.75rem;
+		padding: 0.4rem 0.75rem;
+	}
+</style>

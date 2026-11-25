@@ -1,0 +1,465 @@
+---
+import { OPENSEARCH_PATH } from "@lib/opensearch";
+import { PUBLIC_GAME_ICONS_BASE_URL } from "astro:env/client";
+import { gameIconVariables as iconVariables } from "@factorio-expo/ui/game/game-icons.ts";
+import "@factorio-expo/ui/game/game-icons.css";
+import "@factorio-expo/ui/game/rich-text.css";
+import "@styles/global.scss";
+import { Font } from "astro:assets";
+import { anonymousCacheControl } from "@lib/page-cache";
+import { uploadPause } from "@lib/site-pause";
+import { getSiteStatus } from "@lib/site-status";
+import { getViewer } from "@lib/viewer";
+import { allowGuestTurnstile } from "@lib/turnstile";
+import { PUBLIC_TURNSTILE_SITE_KEY } from "astro:env/client";
+import ProblemReport from "@components/layout/ProblemReport.astro";
+import SideNav, { type NavKey } from "@components/layout/SideNav.astro";
+import Bug from "@lucide/astro/icons/bug";
+import LogIn from "@lucide/astro/icons/log-in";
+import LogOut from "@lucide/astro/icons/log-out";
+import Menu from "@lucide/astro/icons/menu";
+import Moon from "@lucide/astro/icons/moon";
+import Upload from "@lucide/astro/icons/upload";
+import Sun from "@lucide/astro/icons/sun";
+
+export interface Props {
+	title: string;
+	/** Plain text for search results and link previews, about 160 characters. */
+	description?: string;
+	/** Root-relative or absolute URL of the link-preview image. */
+	image?: string;
+	/** Root-relative path of the page's preferred URL; defaults to this path. */
+	canonicalPath?: string;
+	/** Keep the page out of search engines. */
+	noindex?: boolean;
+	type?: "website" | "article";
+	/** The sidebar entry to highlight; pages that are not a sidebar entry omit it. */
+	nav?: NavKey;
+}
+
+const DEFAULT_DESCRIPTION =
+	"Share, search and preview Factorio blueprints and blueprint books, with rendered previews and production-rate analysis.";
+
+const {
+	title,
+	description = DEFAULT_DESCRIPTION,
+	image,
+	canonicalPath,
+	noindex = false,
+	type = "website",
+	nav = "none",
+} = Astro.props;
+const site = Astro.site ?? Astro.url;
+// Path only: drops ?token=, ?revision=, comment paging and search filters.
+const canonical = new URL(
+	canonicalPath ?? (Astro.url.pathname.replace(/\/+$/, "") || "/"),
+	site,
+).toString();
+const fullTitle = `${title} · Factorio Expo`;
+const ogImage = new URL(image ?? "/favicon.png", site).toString();
+const viewer = await getViewer(Astro);
+const username = viewer.state === "in" ? viewer.user.username : undefined;
+// The bug button's dialog is on every page: signed-out visitors pass Turnstile.
+allowGuestTurnstile(Astro.csp, PUBLIC_TURNSTILE_SITE_KEY, username !== undefined);
+// Staff's banner and pauses (docs/admin.md#settings). Edge-cached pages are
+// one copy for everyone for minutes: they carry neither.
+const status = anonymousCacheControl(Astro.url.pathname) ? undefined : await getSiteStatus();
+const banner = status?.banner;
+const uploadPaused = status ? uploadPause(status, username !== undefined) : undefined;
+const gameIconVariables = iconVariables(PUBLIC_GAME_ICONS_BASE_URL);
+---
+
+<style is:global>
+	.icon {
+		width: var(--pico-font-size);
+		height: var(--pico-font-size);
+	}
+
+	/* Driven by the data-theme /theme-init.js sets before first paint,
+	   so only the right icon is ever rendered (no flash, no layout shift). */
+	:root[data-theme="dark"] .theme-to-dark,
+	:root:not([data-theme="dark"]) .theme-to-light {
+		display: none;
+	}
+
+	/* [color=...] rich text (@factorio-expo/ui game/rich-text.css). The game picks its
+	   colors for a dark UI, so the light theme darkens them to stay readable. */
+	:root:not([data-theme="dark"]) .rich-text-color {
+		color: color-mix(in oklab, var(--rich-text-color) 60%, black);
+	}
+</style>
+
+<html lang="en" style={gameIconVariables} data-auth={username ? "" : undefined}>
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/png" href="/favicon.png" />
+		<link rel="icon" href="/favicon.ico" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<!-- The mobile browser bar matches the page (Pico's light and dark backgrounds). -->
+		<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#13171f" media="(prefers-color-scheme: dark)" />
+		<title>{fullTitle}</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={canonical} />
+		<link
+			rel="search"
+			type="application/opensearchdescription+xml"
+			title="Factorio Expo"
+			href={OPENSEARCH_PATH}
+		/>
+		{noindex && <meta name="robots" content="noindex, nofollow" />}
+		<meta property="og:site_name" content="Factorio Expo" />
+		<meta property="og:type" content={type} />
+		<meta property="og:title" content={fullTitle} />
+		<meta property="og:description" content={description} />
+		<meta property="og:url" content={canonical} />
+		<meta property="og:image" content={ogImage} />
+		<meta name="twitter:card" content={image ? "summary_large_image" : "summary"} />
+		<slot name="head" />
+		<script is:inline src="/theme-init.js"></script>
+		<Font cssVariable="--font-doppio-one" preload />
+		<Font cssVariable="--font-ubuntu-sans-mono" />
+		<style>
+			:root {
+				--pico-container-max-width: 90rem;
+				--pico-font-family: var(--font-doppio-one);
+				--pico-font-family-monospace: var(--font-ubuntu-sans-mono);
+			}
+
+			header.container,
+			main.container,
+			footer.container {
+				max-width: 90rem;
+				/* Pico drops the side padding above its breakpoints, where the
+				   container is narrower than the window; at 90rem it is not. */
+				padding-inline: clamp(1rem, 3vw, 2rem);
+			}
+
+			.shell {
+				display: grid;
+				grid-template-columns: 16rem minmax(0, 1fr);
+				gap: 2rem;
+				align-items: start;
+			}
+
+			.shell-content {
+				min-width: 0;
+			}
+
+			@media (max-width: 40rem) {
+				.shell {
+					grid-template-columns: minmax(0, 1fr);
+					gap: 1rem;
+				}
+			}
+
+			#menu-toggle {
+				display: none;
+			}
+
+			.session-actions {
+				display: contents;
+			}
+
+			.menu-backdrop {
+				display: none;
+			}
+
+			/* Phones: the header keeps the brand, Upload and a hamburger; the sidebar
+			   (with login/logout and the theme switch) slides over the page. */
+			@media (max-width: 40rem) {
+				#menu-toggle {
+					display: inline-flex;
+				}
+				.session-actions {
+					display: none;
+				}
+				:global(body[data-menu-open]) .menu-backdrop {
+					display: block;
+					position: fixed;
+					inset: 0;
+					z-index: 140;
+					background: rgb(0 0 0 / 0.35);
+					-webkit-backdrop-filter: blur(4px);
+					backdrop-filter: blur(4px);
+				}
+			}
+
+			header.container {
+				position: sticky;
+				top: 0;
+				z-index: 200;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding-top: 1rem;
+				padding-bottom: 1rem;
+				border-bottom: 1px solid var(--pico-muted-border-color);
+				margin-bottom: 1.5rem;
+				background: var(--pico-background-color);
+			}
+
+			.brand,
+			.header-actions a,
+			.header-actions button {
+				display: inline-flex;
+				align-items: center;
+				gap: 0.5rem;
+			}
+
+			.header-start {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+			}
+
+			header.container .brand {
+				text-decoration: none;
+				color: var(--pico-color);
+			}
+
+			.brand img {
+				width: 1.75rem;
+				height: 1.75rem;
+			}
+
+			header.container .header-actions {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+			}
+
+			.header-actions .upload-link {
+				margin-bottom: 0;
+				padding: 0.5rem 0.75rem;
+			}
+
+			.header-actions .icon-button {
+				width: 2.75rem;
+				height: 2.75rem;
+				justify-content: center;
+				padding: 0;
+				margin-bottom: 0;
+			}
+
+			.icon-button svg,
+			.upload-link svg {
+				width: 1.15rem;
+				height: 1.15rem;
+			}
+
+			header.container nav {
+				margin-bottom: 0;
+			}
+
+			.site-banner {
+				margin-bottom: 1.5rem;
+				padding: 0.75rem 1rem;
+				border: 1px solid var(--pico-primary-border);
+				border-radius: var(--pico-border-radius);
+				background: var(--pico-primary-focus);
+				overflow-wrap: anywhere;
+			}
+
+			.site-footer {
+				margin-top: 2rem;
+				padding-top: 1rem;
+				padding-bottom: 1.5rem;
+				border-top: 1px solid var(--pico-muted-border-color);
+				color: var(--pico-muted-color);
+				text-align: center;
+			}
+
+			.site-footer a {
+				color: inherit;
+			}
+
+			/* Touch screens: the footer's inline links get a finger-sized hit area. */
+			@media (pointer: coarse) {
+				.site-footer small:last-of-type :is(a, .link-button) {
+					display: inline-block;
+					padding: 0.5rem 0.15rem;
+				}
+			}
+
+			@media (max-width: 28rem) {
+				.upload-link .upload-label {
+					display: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<header class="container">
+			<a class="brand" href="/" aria-label="Factorio Expo home">
+				<img src="/favicon.png" width="500" height="500" alt="logo" />
+				<strong>Factorio Expo</strong>
+			</a>
+			<nav class="header-actions" aria-label="Main navigation">
+				{uploadPaused ? (
+					<a
+						class="upload-link"
+						role="button"
+						aria-disabled="true"
+						data-tooltip={uploadPaused}
+						data-placement="bottom"
+					>
+						<Upload aria-hidden="true" />
+						<span class="upload-label">Upload</span>
+					</a>
+				) : (
+					<a class="upload-link" href="/upload" role="button">
+						<Upload aria-hidden="true" />
+						<span class="upload-label">Upload</span>
+					</a>
+				)}
+				<span class="session-actions">
+					<button
+						class="icon-button"
+						type="button"
+						aria-label="Report a problem"
+						data-tooltip="Report a problem"
+						data-placement="bottom"
+						data-problem-report-open
+					>
+						<Bug aria-hidden="true" />
+					</button>
+					<a
+						class="icon-button"
+						href="/login"
+						role="button"
+						aria-label="Log in"
+						data-tooltip="Log in"
+						data-placement="bottom"
+						data-guest-only
+					>
+						<LogIn aria-hidden="true" />
+					</a>
+					<button
+						class="icon-button"
+						data-logout
+						type="button"
+						aria-label="Log out"
+						data-tooltip="Log out"
+						data-placement="bottom"
+						data-auth-only
+					>
+						<LogOut aria-hidden="true" />
+					</button>
+					<button
+						class="icon-button"
+						data-theme-toggle
+						type="button"
+						aria-label="Switch theme"
+						data-placement="left"
+					>
+						<Sun class="theme-to-light" aria-hidden="true" />
+						<Moon class="theme-to-dark" aria-hidden="true" />
+					</button>
+				</span>
+				<button
+					id="menu-toggle"
+					class="icon-button"
+					type="button"
+					aria-label="Open menu"
+					aria-controls="sidebar"
+					aria-expanded="false"
+				>
+					<Menu aria-hidden="true" />
+				</button>
+			</nav>
+		</header>
+		<div class="menu-backdrop" data-menu-close></div>
+		{banner && (
+			<aside class="container site-banner" role="status" data-site-banner>
+				{banner}
+			</aside>
+		)}
+		<main class="container">
+			<div class="shell">
+				<SideNav active={nav} username={username} />
+				<div class="shell-content">
+					<slot />
+				</div>
+			</div>
+		</main>
+		<footer class="container site-footer">
+			<small>
+				Factorio is a trademark of Wube Software Ltd. Factorio Expo is an unofficial fan
+				site, not affiliated with or endorsed by Wube Software.{" "}
+				<a href="/about#unofficial">More</a>
+			</small>
+			<br />
+			<small>
+				<a href="/terms-of-use">Terms of use</a> ·{" "}
+				<a href="/privacy-policy">Privacy policy</a> ·{" "}
+				<button type="button" class="link-button" data-problem-report-open>
+					Report a problem
+				</button>
+			</small>
+		</footer>
+		<ProblemReport />
+		<script>
+			// Its own script: dates.ts may wait for the Temporal polyfill, and the
+			// rest of the page's script must not.
+			import { upgradeTimes } from "@factorio-expo/ui/utils/dates.ts";
+
+			upgradeTimes();
+		</script>
+		<script>
+			import { logout } from "@lib/auth";
+
+			const menuToggle = document.querySelector<HTMLButtonElement>("#menu-toggle")!;
+			const themeToggles =
+				document.querySelectorAll<HTMLButtonElement>("[data-theme-toggle]");
+
+			function setMenu(open: boolean) {
+				document.body.toggleAttribute("data-menu-open", open);
+				menuToggle.setAttribute("aria-expanded", String(open));
+				menuToggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+			}
+			menuToggle.addEventListener("click", () =>
+				setMenu(!document.body.hasAttribute("data-menu-open")),
+			);
+			document
+				.querySelector("[data-menu-close]")!
+				.addEventListener("click", () => setMenu(false));
+			document.addEventListener("keydown", (event) => {
+				if (event.key === "Escape") setMenu(false);
+			});
+
+			function updateThemeToggle() {
+				const isDark = document.documentElement.dataset.theme === "dark";
+				for (const toggle of themeToggles) {
+					toggle.setAttribute(
+						"aria-label",
+						`Switch to ${isDark ? "light" : "dark"} theme`,
+					);
+					toggle.dataset.tooltip = `Switch to ${isDark ? "light" : "dark"} theme`;
+				}
+			}
+
+			for (const button of document.querySelectorAll<HTMLButtonElement>("[data-logout]")) {
+				button.addEventListener("click", async () => {
+					await logout().catch(() => undefined);
+					location.assign("/");
+				});
+			}
+
+			updateThemeToggle();
+			for (const toggle of themeToggles) {
+				toggle.addEventListener("click", () => {
+					const nextTheme =
+						document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+					document.documentElement.dataset.theme = nextTheme;
+					try {
+						localStorage.setItem("theme", nextTheme);
+					} catch {
+						// Storage unavailable: the theme still applies for this page view.
+					}
+					updateThemeToggle();
+				});
+			}
+		</script>
+	</body>
+</html>

@@ -1,0 +1,38 @@
+---
+// Kind filter: what a result is: a blueprint, a top-level book or a planner.
+// Several choices match any of them; none means the page's default,
+// blueprints only (DEFAULT_KINDS). Each option shows how many results the
+// search has of that kind.
+import MultiSelect from "@components/form/MultiSelect.astro";
+import type { NodeKind } from "@lib/api";
+import { KIND_FILTER_OPTIONS } from "@lib/search/query";
+
+interface Props {
+	selected: string[];
+	/** Matches per kind, counted without the kind filter; absent without results. */
+	counts?: Partial<Record<NodeKind, number>>;
+}
+
+const { selected, counts } = Astro.props;
+const options = KIND_FILTER_OPTIONS.map((option) =>
+	counts ? Object.assign({}, option, { count: counts[option.value] ?? 0 }) : option,
+);
+---
+
+<div class="kind-filter">
+	<MultiSelect
+		id="search-kind"
+		name="kind"
+		label="Kind"
+		placeholder="Blueprint"
+		options={options}
+		selected={selected}
+	/>
+</div>
+
+<style>
+	/* As in ModFilter: the grid resets direct children only. */
+	.kind-filter :global(.multiselect) {
+		margin: 0;
+	}
+</style>

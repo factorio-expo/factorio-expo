@@ -1,0 +1,48 @@
+---
+import IconPicker from "./IconPicker.svelte";
+import type { IconPickerKind } from "../data/icon-picker.data";
+
+interface Props {
+	targetId?: string;
+	kind?: IconPickerKind | IconPickerKind[];
+	label?: string;
+	name?: string;
+	selected?: string[];
+	quality?: string;
+	qualityName?: string;
+	multiple?: boolean;
+	allowAny?: boolean;
+	placeholder?: string;
+}
+
+const { targetId, ...props } = Astro.props;
+---
+
+<div class="icon-picker-field">
+	{targetId ? (
+		<div class="icon-picker-label">
+			<slot name="label" />
+			<IconPicker {targetId} {...props} client:visible />
+		</div>
+	) : (
+		<IconPicker {...props} client:visible />
+	)}
+	<slot />
+</div>
+
+<style>
+	.icon-picker-field {
+		min-width: 0;
+		margin-bottom: 0;
+	}
+	.icon-picker-label {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin-bottom: 0.5rem;
+	}
+	.icon-picker-label :global(label) {
+		margin: 0;
+	}
+</style>

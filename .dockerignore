@@ -1,0 +1,20 @@
+.git/
+.idea/
+.vscode/
+.DS_Store
+
+.env
+.env.*
+
+**/node_modules/
+e2e/
+# The pnpm workspace's member list (pnpm-workspace.yaml) includes e2e.
+!e2e/package.json
+bin/
+dist/
+build/
+coverage/
+
+factorio-data/
+factorio/factorio-server/factorio/
+factorio/factorio-server/factorio-linux64.tar.xz

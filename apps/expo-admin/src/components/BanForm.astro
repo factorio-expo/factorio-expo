@@ -1,0 +1,106 @@
+---
+// A new ban: what it blocks, why, how long. Posts action=ban-create
+// (handleBanPost). With `username` fixed (a user's page) the name is hidden.
+import { banActionLabel, banActions, banReasons, MAX_BAN_DAYS, reasonLabel } from "@lib/bans";
+
+export interface Props {
+	/** Prefills the username; with `fixed`, the form bans only this user. */
+	username?: string | undefined;
+	fixed?: boolean;
+}
+
+const { username = "", fixed = false } = Astro.props;
+---
+
+<form method="post" class="ban-form">
+	<input type="hidden" name="action" value="ban-create" />
+	{fixed ? (
+		<input type="hidden" name="username" value={username} />
+	) : (
+		<label>
+			Username
+			<input type="text" name="username" value={username} required autocomplete="off" />
+		</label>
+	)}
+	<fieldset>
+		<legend>Ban from</legend>
+		{banActions.map((action) => (
+			<label>
+				<input
+					type="checkbox"
+					name="actions"
+					value={action}
+					checked={action === "comment"}
+				/>
+				{banActionLabel[action]}
+			</label>
+		))}
+	</fieldset>
+	<div class="row">
+		<label>
+			Reason
+			<select name="reason_code" required>
+				{banReasons.map((code) => (
+					<option value={code}>{reasonLabel(code)}</option>
+				))}
+			</select>
+		</label>
+		<label>
+			Days
+			<input type="number" name="days" min="1" max={MAX_BAN_DAYS} value="7" />
+		</label>
+		<label class="check">
+			<input type="checkbox" name="permanent" value="yes" />
+			Permanent
+		</label>
+	</div>
+	<label>
+		Note <small class="muted">(staff only)</small>
+		<input type="text" name="note" maxlength="1000" />
+	</label>
+	<div class="actions">
+		<button type="submit">Ban</button>
+	</div>
+</form>
+
+<style>
+	.ban-form {
+		display: grid;
+		gap: 0.75rem;
+		margin: 0;
+	}
+	.ban-form label,
+	.ban-form fieldset,
+	.ban-form input,
+	.ban-form select {
+		margin: 0;
+	}
+	fieldset {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem 1rem;
+		padding: 0;
+		border: 0;
+	}
+	legend {
+		margin-bottom: 0.3rem;
+	}
+	fieldset label,
+	.check {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+	.row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		align-items: end;
+	}
+	.row label:not(.check) {
+		flex: 1 1 8rem;
+	}
+	.check {
+		padding-bottom: 0.5rem;
+	}
+</style>

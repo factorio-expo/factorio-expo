@@ -1,0 +1,51 @@
+---
+// A UTC date and time field written "2026-11-20 18:00", with flatpickr's
+// calendar (it edits the text only; the console reads it as UTC).
+interface Props {
+	name: string;
+	label: string;
+	value: string;
+	required?: boolean;
+	placeholder?: string;
+	/** Small text under the field. */
+	hint?: string;
+}
+const {
+	name,
+	label,
+	value,
+	required = false,
+	placeholder = "2026-11-20 18:00",
+	hint,
+} = Astro.props;
+---
+
+<label>
+	{label}
+	<input
+		type="text"
+		name={name}
+		value={value}
+		required={required}
+		placeholder={placeholder}
+		pattern="\d{4}-\d{2}-\d{2} \d{2}:\d{2}"
+		autocomplete="off"
+		data-datetime
+	/>
+	{hint && <small>{hint}</small>}
+</label>
+
+<script>
+	import flatpickr from "flatpickr";
+	import "flatpickr/dist/flatpickr.min.css";
+
+	for (const input of document.querySelectorAll<HTMLInputElement>("input[data-datetime]")) {
+		flatpickr(input, {
+			enableTime: true,
+			time_24hr: true,
+			allowInput: true,
+			dateFormat: "Y-m-d H:i",
+			locale: { firstDayOfWeek: 1 },
+		});
+	}
+</script>

@@ -1,0 +1,367 @@
+---
+// Upload form (no `entry`) or new-revision form (with `entry`); behaviour in submission-form.ts.
+// An upload takes its blueprint from one of three tabs, a pasted exchange string, a text file
+// read in the browser (upload-file.ts) or an import from a link (submission-import.ts, upload-tabs.ts); a revision only has the string.
+import type { Entry, TagGroup } from "@lib/api";
+import EntryDetailsFields from "@components/entry-details/EntryDetailsFields.astro";
+import TagList from "@components/common/TagList.astro";
+import { tagRefs } from "@lib/tags";
+import HumanCheck from "@components/common/HumanCheck.astro";
+import PausedNotice from "@components/common/PausedNotice.astro";
+import TermsNote from "@components/common/TermsNote.astro";
+
+interface Props {
+	tagGroups?: TagGroup[];
+	entry?: Entry;
+	/** New revisions only: whether the server found the viewer allowed to create one. */
+	canEdit?: boolean;
+	/** Uploads only: a signed-in uploader picks a visibility; anonymous entries are always public. */
+	signedIn?: boolean;
+	/** Why uploading is paused for this viewer (lib/site-pause.ts); the form is then disabled. */
+	paused?: string;
+	/** Uploads only: the signed-in uploader's name, which gives the short link field its prefix. */
+	username?: string;
+}
+const { tagGroups = [], entry, canEdit = true, signedIn = false, paused, username } = Astro.props;
+---
+
+<form data-submission-form data-entry-id={entry?.id}>
+	{paused && <PausedNotice message={paused} />}
+	{entry && (
+		<p>
+			Entry details stay unchanged. Edit the title and description inline on the entry page.
+		</p>
+	)}
+	<fieldset disabled={!canEdit || Boolean(paused)} data-submission-fields>
+		<div class="source" data-upload-tabs={entry ? undefined : ""}>
+			{!entry && (
+				<div class="tabs" role="tablist" aria-label="Where the blueprint comes from">
+					<button
+						type="button"
+						role="tab"
+						id="upload-tab-paste"
+						data-tab="paste"
+						aria-controls="upload-panel-paste"
+						aria-selected="true"
+					>
+						Paste string
+					</button>
+					<button
+						type="button"
+						role="tab"
+						id="upload-tab-file"
+						data-tab="file"
+						aria-controls="upload-panel-file"
+						aria-selected="false"
+						tabindex="-1"
+					>
+						From file
+					</button>
+					<button
+						type="button"
+						role="tab"
+						id="upload-tab-import"
+						data-tab="import"
+						aria-controls="upload-panel-import"
+						aria-selected="false"
+						tabindex="-1"
+					>
+						Import from link
+					</button>
+				</div>
+			)}
+			<div
+				role={entry ? undefined : "tabpanel"}
+				id={entry ? undefined : "upload-panel-paste"}
+				aria-labelledby={entry ? undefined : "upload-tab-paste"}
+				data-paste-panel
+			>
+				<label for="upload-blueprint">Blueprint exchange string</label>
+				<textarea
+					class="mono"
+					id="upload-blueprint"
+					name="blueprint"
+					rows="8"
+					placeholder="Paste a blueprint or blueprint book exchange string, or drop a text file..."
+					required={Boolean(entry)}
+				>{entry?.revision?.original_string ?? ""}</textarea>
+				{/* Filled by blueprint-inspect.ts once a string is pasted. */}
+				<div class="blueprint-inspection">
+					<small data-blueprint-summary aria-live="polite" hidden></small>
+					{!entry && (
+						<button
+							type="button"
+							class="secondary outline"
+							data-copy-blueprint-details
+							hidden
+						>
+							Import details from blueprint
+						</button>
+					)}
+				</div>
+			</div>
+			{!entry && (
+				<div
+					role="tabpanel"
+					id="upload-panel-file"
+					aria-labelledby="upload-tab-file"
+					hidden
+					data-file
+				>
+					<label for="upload-file">Text file with the exchange string</label>
+					<input id="upload-file" type="file" accept=".txt,text/plain" data-file-input />
+					<small data-file-status role="status" aria-live="polite"></small>
+					<textarea
+						class="mono"
+						rows="4"
+						readonly
+						aria-label="Content of the file"
+						data-file-text
+					></textarea>
+					<div class="blueprint-inspection">
+						<small data-file-summary aria-live="polite" hidden></small>
+						<button
+							type="button"
+							class="secondary outline"
+							data-copy-file-details
+							hidden
+						>
+							Import details from blueprint
+						</button>
+					</div>
+				</div>
+			)}
+			{!entry && (
+				<div
+					role="tabpanel"
+					id="upload-panel-import"
+					aria-labelledby="upload-tab-import"
+					hidden
+					data-import
+				>
+					<p>
+						<small>
+							The site fetches the blueprint for you from a link shaped like:
+						</small>
+					</p>
+					<ul class="sites">
+						<li>
+							<code>https://pastebin.com/&lt;id&gt;</code>
+						</li>
+						<li>
+							<code>https://hastebin.com/&lt;key&gt;</code>
+						</li>
+						<li>
+							<code>https://gist.github.com/&lt;user&gt;/&lt;gist id&gt;</code>
+						</li>
+						<li>
+							<code>
+								https://raw.githubusercontent.com/&lt;user&gt;/&lt;repo&gt;/&lt;ref&gt;/&lt;file&gt;
+							</code>
+						</li>
+						<li>
+							<code>
+								https://gitlab.com/&lt;namespace&gt;/&lt;project&gt;/-/raw/&lt;ref&gt;/&lt;file&gt;
+							</code>
+						</li>
+						<li>
+							<code>https://factoriobin.com/post/&lt;id&gt;</code>
+						</li>
+						<li>
+							<code>https://docs.google.com/document/d/&lt;id&gt;</code> (shared with
+							"anyone with the link")
+						</li>
+						<li>
+							<code>https://factorioprints.com/view/&lt;id&gt;</code>
+						</li>
+						<li>
+							<code>https://www.factoriocodex.com/blueprints/&lt;id&gt;</code>
+						</li>
+					</ul>
+					<label for="upload-import-link">Link</label>
+					<input
+						id="upload-import-link"
+						type="text"
+						inputmode="url"
+						autocomplete="off"
+						placeholder="https://pastebin.com/..."
+						data-import-link
+					/>
+					<label for="upload-import-consent" class="consent">
+						<input type="checkbox" id="upload-import-consent" data-import-consent />I
+						made this blueprint or have the right to share it here
+					</label>
+					<div data-import-human>
+						<HumanCheck action="import" />
+					</div>
+					<button type="button" class="secondary outline" data-import-fetch>
+						Import
+					</button>
+					<small
+						class="import-status"
+						data-import-status
+						role="status"
+						aria-live="polite"
+					></small>
+					<div class="blueprint-inspection">
+						<small data-import-summary aria-live="polite" hidden></small>
+						<button
+							type="button"
+							class="secondary outline"
+							data-copy-site-details
+							hidden
+						>
+							Import details from website
+						</button>
+						<button
+							type="button"
+							class="secondary outline"
+							data-copy-import-details
+							hidden
+						>
+							Import details from blueprint
+						</button>
+					</div>
+					<p class="import-source" data-import-source hidden>
+						<small>
+							Imported from <strong data-import-source-host></strong>.
+						</small>
+					</p>
+				</div>
+			)}
+		</div>
+
+		{entry ? (
+			<>
+				<label for="revision-note">
+					What changed? <small>(optional, up to 280 characters)</small>
+				</label>
+				<textarea id="revision-note" name="note" rows="2" maxlength="280"></textarea>
+				<label for="upload-title">Entry title</label>
+				<input id="upload-title" type="text" value={entry.title} readonly />
+				<label for="upload-description">Entry description</label>
+				<textarea id="upload-description" rows="4" readonly>{entry.description}</textarea>
+				{entry.tags.length > 0 && (
+					<TagList tags={tagRefs(tagGroups, entry.tags)} label="Entry tags" />
+				)}
+			</>
+		) : (
+			<EntryDetailsFields
+				idPrefix="upload"
+				tagGroups={tagGroups}
+				visibility={signedIn ? "public" : undefined}
+				alias={signedIn && username ? { username, current: "" } : undefined}
+				expiry={{}}
+				tagSuggestions
+			/>
+		)}
+		{canEdit && (
+			<div data-submit-check>
+				<HumanCheck action={entry ? "revision" : "upload"} />
+			</div>
+		)}
+		{/* Enabled by submission-form.ts: submitted without it, the form would GET the exchange string into the URL (and drop ?token=). */}
+		<button type="submit" disabled>
+			{entry ? "Create revision" : "Upload"}
+		</button>
+	</fieldset>
+	{canEdit && <TermsNote verb={entry ? "adding a revision" : "uploading"} />}
+	<p data-submission-status role="status" aria-live="polite">
+		{canEdit ? "" : "Only the entry owner or a valid edit-token holder can create a revision."}
+	</p>
+</form>
+
+<script>
+	import "./submission-form.ts";
+</script>
+
+<style>
+	.source {
+		margin-bottom: var(--pico-spacing);
+	}
+	/* The pill tab bar of the trending tabs (home/TrendingTabs.astro). */
+	.tabs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.15rem;
+		width: fit-content;
+		max-width: 100%;
+		margin-bottom: 1rem;
+		padding: 0.2rem;
+		border: 1px solid var(--pico-muted-border-color);
+		border-radius: 2rem;
+		background: var(--pico-card-background-color);
+	}
+	.tabs button {
+		width: auto;
+		margin: 0;
+		padding: 0.3rem 0.95rem;
+		border: 0;
+		border-radius: 2rem;
+		background: transparent;
+		color: var(--pico-muted-color);
+		font-size: 0.9rem;
+		box-shadow: none;
+		transition: background-color 0.15s;
+	}
+	.tabs button:hover,
+	.tabs button:focus-visible {
+		background: color-mix(in srgb, var(--pico-primary) 12%, transparent);
+	}
+	.tabs button[aria-selected="true"] {
+		background: var(--pico-primary-focus);
+		color: var(--pico-primary);
+		font-weight: 600;
+	}
+	[role="tabpanel"][hidden] {
+		display: none;
+	}
+	.blueprint-inspection {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 1rem;
+		margin-bottom: var(--pico-spacing);
+	}
+	[data-import-fetch] {
+		width: auto;
+		margin-bottom: 0.5rem;
+	}
+	.consent {
+		margin-top: 0.5rem;
+	}
+	.consent input {
+		margin-inline-end: 0.6rem;
+	}
+	.sites {
+		margin: 0 0 var(--pico-spacing);
+		font-size: 0.85rem;
+		overflow-wrap: anywhere;
+	}
+	.import-status {
+		display: block;
+		margin-bottom: 0.5rem;
+	}
+	.import-status[data-error] {
+		color: var(--pico-del-color);
+	}
+	.blueprint-inspection small {
+		flex: 1 1 16rem;
+		overflow-wrap: anywhere;
+	}
+	.blueprint-inspection button {
+		width: auto;
+		margin: 0;
+		padding: 0.25rem 0.75rem;
+		font-size: 0.875rem;
+	}
+	@media (max-width: 480px) {
+		.tabs {
+			width: 100%;
+		}
+		.tabs button {
+			flex: 1 1 0;
+			padding-inline: 0.5rem;
+		}
+	}
+</style>

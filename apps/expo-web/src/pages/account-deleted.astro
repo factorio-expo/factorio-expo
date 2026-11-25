@@ -1,0 +1,24 @@
+---
+// Where the account page sends the browser after "Delete my account".
+import Page from "@layouts/Page.astro";
+---
+
+<Page title="Account deleted" noindex>
+	<h1>Your account is deleted</h1>
+	<p>
+		You are logged out everywhere, and nobody can log in to the account any more. Its profile,
+		entries, favorites and collections are gone from the site.
+	</p>
+	<p>
+		In 7 days everything left of it is erased for good, and its username can be taken again.
+		Entries you uploaded without logging in are not affected: their edit links still work.
+	</p>
+	<p>
+		You are welcome back any time: signing up again, with the same provider or a new passkey,
+		makes a new, empty account. The <a href="/privacy-policy">privacy policy</a> says what is
+		kept and for how long.
+	</p>
+	<p>
+		<a href="/">Back to the blueprints</a>
+	</p>
+</Page>

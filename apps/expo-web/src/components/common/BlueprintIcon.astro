@@ -1,0 +1,90 @@
+---
+import GameIcon from "@factorio-expo/ui/game/GameIcon.astro";
+import type { NodeKind } from "@lib/api";
+import { scanTokens } from "@factorio-expo/ui/game/icon-token.ts";
+import { nodeKindItem, nodeKindLabel } from "@lib/planners";
+
+interface Props {
+	kind: NodeKind;
+	icons: string;
+}
+
+const { kind, icons } = Astro.props;
+const overlays = scanTokens(icons).slice(0, 4);
+---
+
+<span class="blueprint-icon" data-kind={kind} role="img" aria-label={nodeKindLabel(kind)}>
+	<GameIcon prototypeType="item" name={nodeKindItem(kind)} decorative />
+	<span class="blueprint-icon-overlays" data-count={overlays.length} aria-hidden="true">
+		{overlays.map((icon) => (
+			<GameIcon
+				prototypeType={icon.type}
+				name={icon.name}
+				quality={icon.quality}
+				decorative
+			/>
+		))}
+	</span>
+</span>
+
+<style>
+	/* The overlay box is the area inside the dotted line of the base sprite:
+	   almost the whole blueprint, the upper-left part of the book cover. */
+	.blueprint-icon {
+		--overlay-inset: 8%;
+		--size-many: 0.43em;
+		--size-two: 0.42em;
+		--size-one: 0.62em;
+		position: relative;
+		display: inline-block;
+		flex: none;
+		width: 1em;
+		height: 1em;
+		vertical-align: middle;
+	}
+
+	.blueprint-icon[data-kind="book"] {
+		--overlay-inset: 23% 16% 37% 21%;
+		--size-many: 0.3em;
+		--size-two: 0.3em;
+		--size-one: 0.46em;
+	}
+
+	.blueprint-icon > :global(.factorio-icon) {
+		position: absolute;
+		inset: 0;
+	}
+
+	.blueprint-icon-overlays {
+		position: absolute;
+		inset: var(--overlay-inset);
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		grid-template-rows: repeat(2, 1fr);
+		align-content: center;
+		justify-items: center;
+		align-items: center;
+	}
+
+	.blueprint-icon-overlays > :global(.factorio-icon) {
+		position: static;
+		font-size: var(--size-many);
+	}
+
+	.blueprint-icon-overlays[data-count="1"] {
+		grid-template-columns: 1fr;
+		grid-template-rows: 1fr;
+	}
+
+	.blueprint-icon-overlays[data-count="1"] > :global(.factorio-icon) {
+		font-size: var(--size-one);
+	}
+
+	.blueprint-icon-overlays[data-count="2"] {
+		grid-template-rows: 1fr;
+	}
+
+	.blueprint-icon-overlays[data-count="2"] > :global(.factorio-icon) {
+		font-size: var(--size-two);
+	}
+</style>

@@ -1,0 +1,95 @@
+---
+import History from "@lucide/astro/icons/rotate-ccw-clock";
+import ModalDialog from "@components/common/ModalDialog.astro";
+
+interface Props {
+	entryId: string;
+	currentRevisionId?: string;
+	selectedRevisionId?: string;
+	versionNumber?: number;
+}
+const { entryId, currentRevisionId, selectedRevisionId, versionNumber } = Astro.props;
+---
+
+<div
+	data-revision-picker
+	data-entry-id={entryId}
+	data-current-id={currentRevisionId}
+	data-selected-id={selectedRevisionId}
+>
+	<button
+		type="button"
+		class="icon-button"
+		data-open-revisions
+		aria-haspopup="dialog"
+		aria-label="Revision history"
+		data-tooltip="Revision history"
+	>
+		<History aria-hidden="true" />
+		{versionNumber ? `Revision ${versionNumber}` : "Revision history"}
+	</button>
+	<ModalDialog
+		titleId="revision-picker-title"
+		title="Pick a revision"
+		closeLabel="Close revision history"
+		width="40rem"
+	>
+		<p data-revision-status role="status" aria-live="polite"></p>
+		<ul data-revision-list></ul>
+	</ModalDialog>
+</div>
+
+<script>
+	import "./revision-picker.ts";
+</script>
+
+<style>
+	[data-revision-picker] {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.35rem 0.75rem;
+	}
+	[data-open-revisions] {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.3rem;
+		line-height: 1;
+		width: auto;
+		/* Negative margins: taller than a text line, and its label lines up with the column. */
+		margin: -0.5rem 0 -0.5rem -0.6rem;
+		padding: 0 0.6rem;
+		font-size: 0.875rem;
+	}
+	[data-open-revisions] :global(svg) {
+		width: 1.15rem;
+		height: 1.15rem;
+	}
+	[data-revision-list] {
+		padding: 0;
+		margin: 0;
+	}
+	/* The uploader's note on a revision: its own line, typed line breaks kept. */
+	[data-revision-list] :global(.revision-note) {
+		flex-basis: 100%;
+		margin: 0;
+		font-size: 0.875rem;
+		white-space: pre-line;
+		overflow-wrap: anywhere;
+		color: var(--pico-muted-color);
+	}
+	[data-revision-list] :global(li) {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.25rem 1rem;
+		padding: 0.75rem 0;
+		border-top: 1px solid var(--pico-muted-border-color);
+	}
+	[data-revision-list] :global(time) {
+		font-size: 0.875rem;
+		color: var(--pico-muted-color);
+	}
+</style>

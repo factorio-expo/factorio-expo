@@ -1,0 +1,146 @@
+---
+// Reserved usernames: names nobody may sign up with, matched ignoring case,
+// "_" and "-". Reserving a name an account already has leaves that account
+// alone.
+import Outcome from "@components/Outcome.astro";
+import Console from "@layouts/Console.astro";
+import { FormError, handlePost } from "@lib/api/actions";
+import { loadFromApi } from "@lib/api/page";
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+import { formText } from "@lib/forms";
+
+const posted = await handlePost(Astro, async (api, form) => {
+	switch (formText(form, "action")) {
+		case "reserve":
+			await api.reserveUsername(formText(form, "name"), formText(form, "reason"));
+			return "Name reserved.";
+		case "release":
+			await api.releaseUsername(formText(form, "name"));
+			return "Name released: anyone may sign up with it now.";
+		default:
+			throw new FormError("Unknown action.");
+	}
+});
+if (posted) return posted;
+
+const loaded = await loadFromApi(Astro, (api) => api.reservedUsernames());
+const names = loaded.data;
+const q = Astro.url.searchParams.get("q")?.trim().toLowerCase().replaceAll(/[_-]/g, "") ?? "";
+const shown = names?.filter((name) => !q || name.name.includes(q));
+const date = (iso: string) => isoDateTime(iso).replace(/, \d\d:\d\d UTC$/, "");
+---
+
+<Console
+	title="Reserved names"
+	nav="reserved-names"
+	description="Usernames nobody may sign up with, matched ignoring case, '_' and '-'."
+>
+	<Outcome loadError={loaded.error} />
+
+	<section class="panel" aria-labelledby="reserve">
+		<div class="panel-head">
+			<h2 id="reserve">Reserve a name</h2>
+		</div>
+		<form method="post" class="actions">
+			<input type="hidden" name="action" value="reserve" />
+			<input
+				type="text"
+				name="name"
+				placeholder="name"
+				aria-label="Name"
+				required
+				maxlength="40"
+			/>
+			<input
+				type="text"
+				name="reason"
+				placeholder="Reason (staff, brand, ...)"
+				aria-label="Reason"
+				maxlength="200"
+			/>
+			<button type="submit">Reserve</button>
+		</form>
+		<small class="muted">
+			An account that already has the name keeps it. Reserving a name again changes its
+			reason.
+		</small>
+	</section>
+
+	<form method="get" class="toolbar" role="search">
+		<input
+			type="search"
+			name="q"
+			value={q}
+			placeholder="Find a name"
+			aria-label="Find a reserved name"
+		/>
+		<button type="submit" class="secondary">
+			Find
+		</button>
+		{q && <a href="/reserved-usernames">Clear</a>}
+	</form>
+
+	{shown && shown.length === 0 && (
+		<p class="empty">No reserved names{q ? ` match "${q}"` : ""}.</p>
+	)}
+	{shown && shown.length > 0 && (
+		<div class="table-wrap">
+			<table class="data">
+				<thead>
+					<tr>
+						<th scope="col">Name</th>
+						<th scope="col">Reason</th>
+						<th scope="col">Added</th>
+						<th scope="col">Account with it</th>
+						<th scope="col" aria-label="Actions" />
+					</tr>
+				</thead>
+				<tbody>
+					{shown.map((name) => (
+						<tr>
+							<td>
+								<code>{name.name}</code>
+							</td>
+							<td>{name.reason}</td>
+							<td class="nowrap">{date(name.created_at)}</td>
+							<td>
+								{name.taken_by && (
+									<a href={`/users?q=${encodeURIComponent(name.taken_by)}`}>
+										{name.taken_by}
+									</a>
+								)}
+							</td>
+							<td>
+								<form method="post">
+									<input type="hidden" name="name" value={name.name} />
+									<button
+										type="submit"
+										name="action"
+										value="release"
+										class="secondary"
+										data-confirm={`Release ${name.name}? Anyone may sign up with it then.`}
+									>
+										Release
+									</button>
+								</form>
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+	)}
+</Console>
+
+<style>
+	.nowrap {
+		white-space: nowrap;
+	}
+	td form {
+		margin: 0;
+	}
+	td form button {
+		margin: 0;
+		padding: 0.25rem 0.7rem;
+	}
+</style>

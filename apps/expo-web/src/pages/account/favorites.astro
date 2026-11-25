@@ -1,0 +1,36 @@
+---
+// The signed-in user's favorites as entry cards, paged (SSR, so it matches
+// every other card list). Unfavoriting on a card takes effect on the next load.
+import Pagination from "@components/common/Pagination.astro";
+import EntryGrid from "@components/entry/EntryGrid.astro";
+import Page from "@layouts/Page.astro";
+import { getServerApiClient } from "@lib/api/server.ts";
+import { listOffset, offsetHref } from "@lib/profile";
+import { redirectToLoginUnlessSignedIn } from "@lib/viewer";
+import { toCard } from "@utils/entry-card.ts";
+
+const redirect = await redirectToLoginUnlessSignedIn(Astro);
+if (redirect) return redirect;
+
+const PAGE_SIZE = 20;
+const offset = listOffset(Astro.url);
+const page = await getServerApiClient(Astro).favorites.listMine({ limit: PAGE_SIZE, offset });
+---
+
+<Page title="Favorites" nav="favorites" noindex>
+	<h1>Favorites</h1>
+	{page.favorites.length === 0 ? (
+		<p role="status">You have not favorited anything yet.</p>
+	) : (
+		<>
+			<EntryGrid cards={page.favorites.map((entry) => toCard(entry))} />
+			<Pagination
+				label="Favorite pages"
+				total={page.total}
+				limit={PAGE_SIZE}
+				offset={offset}
+				href={(next) => offsetHref(Astro.url, next)}
+			/>
+		</>
+	)}
+</Page>

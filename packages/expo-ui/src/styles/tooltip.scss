@@ -1,0 +1,10 @@
+// Pico draws every tooltip as ::before/::after boxes that stay in the layout,
+// only transparent, until hovered. Near the right edge (an edit button after
+// a long title on a phone) the hidden box widens the page and it scrolls
+// sideways. A tooltip at rest is not drawn at all; hovered, focused or held
+// open ([data-tip-open], copy buttons) it shows as Pico styles it. Each app's
+// global.scss uses it after Pico.
+[data-tooltip]:not(:hover, :focus, :focus-visible, [data-tip-open])::before,
+[data-tooltip]:not(:hover, :focus, :focus-visible, [data-tip-open])::after {
+	display: none;
+}

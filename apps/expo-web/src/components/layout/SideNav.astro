@@ -1,0 +1,313 @@
+---
+// Site sidebar: one navigation for browsing and the account area. Library and
+// account links only make sense signed in.
+import InfoIcon from "@lucide/astro/icons/info";
+import Braces from "@lucide/astro/icons/braces";
+import Bug from "@lucide/astro/icons/bug";
+import Compass from "@lucide/astro/icons/compass";
+import House from "@lucide/astro/icons/house";
+import Folder from "@lucide/astro/icons/folder";
+import Image from "@lucide/astro/icons/image";
+import LogIn from "@lucide/astro/icons/log-in";
+import LogOut from "@lucide/astro/icons/log-out";
+import Moon from "@lucide/astro/icons/moon";
+import Sun from "@lucide/astro/icons/sun";
+import Trophy from "@lucide/astro/icons/trophy";
+import Package from "@lucide/astro/icons/package";
+import Medal from "@lucide/astro/icons/medal";
+import Settings from "@lucide/astro/icons/settings";
+import Star from "@lucide/astro/icons/star";
+import Upload from "@lucide/astro/icons/upload";
+import UserRound from "@lucide/astro/icons/user-round";
+
+export type NavKey =
+	| "home"
+	| "browse"
+	| "challenges"
+	| "leaderboard"
+	| "upload"
+	| "preview"
+	| "string-tool"
+	| "about"
+	| "entries"
+	| "favorites"
+	| "collections"
+	| "settings"
+	| "profile"
+	| "none";
+
+export interface Props {
+	active?: NavKey;
+	username?: string;
+}
+
+interface Item {
+	key?: NavKey;
+	href: string;
+	label: string;
+	icon: typeof Compass;
+}
+
+const { active, username } = Astro.props;
+
+const groups: { label: string; items: Item[] }[] = [
+	{
+		label: "Explore",
+		items: [
+			{ key: "home", href: "/", label: "Home", icon: House },
+			{ key: "browse", href: "/browse", label: "Browse", icon: Compass },
+			{ key: "challenges", href: "/challenges", label: "Challenges", icon: Trophy },
+			{ key: "leaderboard", href: "/leaderboard", label: "Leaderboard", icon: Medal },
+			{ key: "upload", href: "/upload", label: "Upload", icon: Upload },
+			{ key: "preview", href: "/preview", label: "Preview", icon: Image },
+			{
+				key: "string-tool",
+				href: "/json",
+				label: "JSON Encode/Decode",
+				icon: Braces,
+			},
+		],
+	},
+];
+const about: Item = { key: "about", href: "/about", label: "About", icon: InfoIcon };
+if (username) {
+	groups.push(
+		{
+			label: "Library",
+			items: [
+				{ key: "entries", href: "/account/entries", label: "My entries", icon: Package },
+				{ key: "favorites", href: "/account/favorites", label: "Favorites", icon: Star },
+				{
+					key: "collections",
+					href: "/account/collections",
+					label: "Collections",
+					icon: Folder,
+				},
+			],
+		},
+		{
+			label: "Account",
+			items: [
+				{
+					key: "profile",
+					href: `/u/${encodeURIComponent(username)}`,
+					label: "Public profile",
+					icon: UserRound,
+				},
+				{ key: "settings", href: "/account", label: "Account settings", icon: Settings },
+			],
+		},
+	);
+} else {
+	groups.push({
+		label: "Account",
+		items: [{ href: "/login", label: "Log in", icon: LogIn }],
+	});
+}
+groups.push({ label: "Site", items: [about] });
+---
+
+<aside class="sidenav" id="sidebar">
+	<nav aria-label="Sidebar">
+		<div class="quick">
+			<a
+				class="icon-button"
+				href="/login"
+				role="button"
+				aria-label="Log in"
+				data-tooltip="Log in"
+				data-placement="bottom"
+				data-guest-only
+			>
+				<LogIn aria-hidden="true" />
+			</a>
+			<button
+				class="icon-button"
+				data-logout
+				type="button"
+				aria-label="Log out"
+				data-tooltip="Log out"
+				data-placement="bottom"
+				data-auth-only
+			>
+				<LogOut aria-hidden="true" />
+			</button>
+			<button
+				class="icon-button"
+				data-theme-toggle
+				type="button"
+				aria-label="Switch theme"
+				data-placement="bottom"
+			>
+				<Sun class="theme-to-light" aria-hidden="true" />
+				<Moon class="theme-to-dark" aria-hidden="true" />
+			</button>
+			<button
+				class="icon-button"
+				type="button"
+				aria-label="Report a problem"
+				data-tooltip="Report a problem"
+				data-placement="bottom"
+				data-problem-report-open
+			>
+				<Bug aria-hidden="true" />
+			</button>
+		</div>
+		{groups.map((group) => (
+			<section aria-labelledby={`nav-${group.label.toLowerCase()}`}>
+				<p class="group-label" id={`nav-${group.label.toLowerCase()}`}>
+					{group.label}
+				</p>
+				<ul>
+					{group.items.map((item) => (
+						<li>
+							<a
+								href={item.href}
+								aria-current={item.key && item.key === active ? "page" : undefined}
+							>
+								<item.icon aria-hidden="true" />
+								{item.label}
+							</a>
+						</li>
+					))}
+				</ul>
+			</section>
+		))}
+	</nav>
+</aside>
+
+<style>
+	/* Stays in view under the sticky header while the content scrolls. */
+	.sidenav {
+		position: sticky;
+		top: 6.5rem;
+		max-height: calc(100vh - 7.5rem);
+		overflow-y: auto;
+	}
+	.sidenav nav {
+		display: block;
+		margin: 0;
+	}
+	section + section {
+		margin-top: 1rem;
+	}
+	.group-label {
+		margin: 0 0 0.25rem;
+		padding: 0 0.75rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		color: var(--pico-muted-color);
+	}
+	ul {
+		flex-direction: column;
+		align-items: stretch;
+		margin: 0;
+		padding: 0;
+		width: 100%;
+	}
+	li {
+		display: block;
+		padding: 0;
+	}
+	a {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		margin: 0 0 0.125rem;
+		padding: 0.45rem 0.75rem;
+		border-radius: var(--pico-border-radius);
+		--pico-color: var(--pico-contrast);
+		color: var(--pico-contrast);
+		text-decoration: none;
+		transition:
+			background-color 0.15s,
+			padding-left 0.15s;
+	}
+	a :global(svg) {
+		width: 1.1rem;
+		height: 1.1rem;
+		flex: none;
+	}
+	/* Only the icon carries the accent colour; the label stays neutral. */
+	a :global(svg) {
+		color: var(--pico-primary);
+		transition: transform 0.15s;
+	}
+	a:hover,
+	a:focus-visible {
+		background: color-mix(in srgb, var(--pico-primary) 10%, transparent);
+		padding-left: 1rem;
+	}
+	a:hover :global(svg),
+	a:focus-visible :global(svg) {
+		transform: scale(1.2) rotate(-6deg);
+	}
+	a[aria-current="page"] {
+		background: var(--pico-primary-focus);
+		--pico-color: var(--pico-primary);
+		color: var(--pico-primary);
+		font-weight: 600;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		a,
+		a :global(svg) {
+			transition: none;
+		}
+		a:hover :global(svg),
+		a:focus-visible :global(svg) {
+			transform: none;
+		}
+	}
+
+	/* Login/logout, the theme switch and the bug button live in the header on desktop; on
+	   phones the header only keeps the hamburger and they move here. */
+	.quick {
+		display: none;
+		gap: 0.25rem;
+		margin-bottom: 0.75rem;
+	}
+	.quick .icon-button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		margin: 0;
+		padding: 0;
+	}
+	.quick .icon-button:hover {
+		padding: 0;
+	}
+	.quick :global(svg) {
+		width: 1.15rem;
+		height: 1.15rem;
+		color: inherit;
+		transform: none;
+	}
+
+	/* Phones: hidden until the header's hamburger opens it as a panel over the page. */
+	@media (max-width: 40rem) {
+		.quick {
+			display: flex;
+		}
+		.sidenav {
+			display: none;
+			position: fixed;
+			top: 4.8rem;
+			bottom: 0;
+			left: 0;
+			z-index: 150;
+			width: min(18rem, 85vw);
+			max-height: none;
+			padding: 1rem 0.75rem;
+			border-right: 1px solid var(--pico-muted-border-color);
+			background: var(--pico-background-color);
+			box-shadow: 0 0 2rem rgb(0 0 0 / 0.25);
+		}
+		:global(body[data-menu-open]) .sidenav {
+			display: block;
+		}
+	}
+</style>

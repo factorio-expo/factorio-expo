@@ -1,0 +1,35 @@
+---
+// How long a new entry lives (`expires_in_days`): never by default, or one of
+// the API's lifetimes (catalog.ExpiryDays). With `current`, the entry already
+// expires and the first option keeps that ("" sends nothing).
+import { isoDateTime } from "@factorio-expo/ui/utils/dates.ts";
+
+interface Props {
+	id: string;
+	/** The entry's current expiry, when publishing one that already has it. */
+	current?: string;
+}
+
+const { id, current } = Astro.props;
+const lifetimes = [
+	{ days: 0, label: "Never" },
+	{ days: 1, label: "After 1 day" },
+	{ days: 7, label: "After 7 days" },
+	{ days: 14, label: "After 14 days" },
+	{ days: 30, label: "After 30 days" },
+];
+---
+
+<label for={id}>Expires</label>
+<select id={id} name="expires_in_days">
+	{current && (
+		<option value="" selected>
+			Keep: {isoDateTime(current)}
+		</option>
+	)}
+	{lifetimes.map(({ days, label }) => (
+		<option value={String(days)} selected={!current && days === 0}>
+			{label}
+		</option>
+	))}
+</select>

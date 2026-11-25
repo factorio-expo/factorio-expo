@@ -1,0 +1,136 @@
+---
+// One tag pill. Shared by the tag picker (a span inside an option label, after
+// its checkbox: the checked and focus states follow that sibling), entry cards
+// and the entry page (links to the browse page with the tag as filter, when
+// given an `href`). Long names shrink with an ellipsis. In the picker a facet
+// count sits inside the pill as a small badge (primary colour, inverted on a
+// ticked pill; hidden from assistive tech, the option's checkbox carries the
+// count in its accessible name, see MultiSelectOption); a count of 0 shows no
+// badge unless the pill is ticked, and the pill is muted.
+import GameIcon from "@factorio-expo/ui/game/GameIcon.astro";
+import { parseToken } from "@factorio-expo/ui/game/icon-token";
+
+interface Props {
+	label: string;
+	/** The tag's game icon as a rich-text token ("[item=splitter]"); none when empty. */
+	icon?: string;
+	/** Makes the chip a link. */
+	href?: string;
+	/** Hover text; defaults to the label (useful because it may be cut off). */
+	title?: string;
+	/** How many results the tag would match (facet count); omitted outside the picker. */
+	count?: number;
+}
+
+const { label, icon = "", href, title = label, count } = Astro.props;
+// "[space-age]" is the rich-text shorthand for the Space Age badge, not a [type=name] token.
+const token =
+	icon === "[space-age]"
+		? { type: "utility", name: "space-age", quality: "normal" }
+		: icon
+			? parseToken(icon)
+			: undefined;
+const Tag = href ? "a" : "span";
+const formatted = count === undefined ? "" : count.toLocaleString("en-US");
+---
+
+<Tag
+	class:list={["tag-chip", { link: href }]}
+	href={href}
+	title={title}
+	data-empty={count === 0 ? "" : undefined}
+>
+	{token && (
+		<GameIcon prototypeType={token.type} name={token.name} quality={token.quality} decorative />
+	)}
+	<span class="label">{label}</span>
+	{count !== undefined && (
+		<span class="badge" aria-hidden="true">
+			{formatted}
+		</span>
+	)}
+</Tag>
+
+<style>
+	.tag-chip {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		max-width: 100%;
+		overflow: hidden;
+		padding: 0.2rem 0.65rem;
+		border: var(--pico-border-width) solid var(--pico-muted-border-color);
+		border-radius: 999px;
+		color: var(--pico-color);
+		font-size: 0.85rem;
+		line-height: 1.4;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+
+	.label {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.badge {
+		flex: none;
+		min-width: 1.25rem;
+		padding: 0 0.35rem;
+		border-radius: 999px;
+		background: var(--pico-primary-background);
+		color: var(--pico-primary-inverse);
+		font-size: 0.7rem;
+		font-style: normal;
+		font-weight: 700;
+		line-height: 1.25rem;
+		text-align: center;
+	}
+
+	/* No matches: the pill is muted, and its badge only shows once it is ticked. */
+	.tag-chip[data-empty] {
+		color: var(--pico-muted-color);
+	}
+
+	.tag-chip[data-empty] .badge {
+		display: none;
+	}
+
+	/* Links keep the pill look instead of the framework's link colour and underline. */
+	.tag-chip.link {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.tag-chip.link:hover,
+	.tag-chip.link:focus-visible {
+		border-color: var(--pico-primary-background);
+		color: var(--pico-primary);
+		text-decoration: none;
+	}
+
+	:global(label:hover) > .tag-chip {
+		background: var(--pico-dropdown-hover-background-color);
+	}
+
+	:global(input:checked) + .tag-chip {
+		border-color: var(--pico-primary-background);
+		background: var(--pico-primary-background);
+		color: var(--pico-primary-inverse);
+	}
+
+	:global(input:checked) + .tag-chip .badge {
+		background: var(--pico-primary-inverse);
+		color: var(--pico-primary-background);
+	}
+
+	:global(input:checked) + .tag-chip[data-empty] .badge {
+		display: block;
+	}
+
+	:global(input:focus-visible) + .tag-chip {
+		outline: var(--pico-outline-width) solid var(--pico-primary-focus);
+		outline-offset: 2px;
+	}
+</style>
